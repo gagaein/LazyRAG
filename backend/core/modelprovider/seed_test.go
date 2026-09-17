@@ -445,3 +445,31 @@ model_providers:
 		t.Fatalf("unexpected free auto-selection metadata: %+v", model)
 	}
 }
+
+func TestCatalogVisionDefaultsAndRoundTrip(t *testing.T) {
+	catalog, err := loadModelCatalog([]byte("model_providers:\n  suppliers:\n    - name: OpenAI\n      models:\n        - {name: visual, type: llm, vision: true}\n        - {name: text, type: llm}\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	models := catalog["model_providers"].Suppliers[0].Models
+	if !models[0].Vision || models[1].Vision {
+		t.Fatal("catalog vision not parsed correctly")
+	}
+	db := setupListProviderTestDB(t)
+	provider := orm.DefaultModelProvider{ID: "vision-provider", Name: "vision-provider", Description: "test", BaseURL: "https://example.test/"}
+	if err := db.Create(&provider).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, model := range models {
+		if err := upsertDefaultModel(db, time.Now(), provider.ID, provider.Name, model); err != nil {
+			t.Fatal(err)
+		}
+		var stored orm.DefaultModel
+		if err := db.Take(&stored, "name = ?", model.Name).Error; err != nil {
+			t.Fatal(err)
+		}
+		if stored.Vision != model.Vision {
+			t.Fatal("catalog vision not persisted")
+		}
+	}
+}

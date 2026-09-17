@@ -1,5 +1,8 @@
 # Model catalog — source of truth for default_model_providers and default_models.
 # Loaded at startup by modelprovider.SeedModelCatalog(); replaces the seed SQL INSERT statements.
+# Set vision: true below type: llm when that model accepts image input (default: false).
+# Example: {name: custom-multimodal-llm, type: llm, vision: true}
+# Existing type: vlm models retain their image capability.
 # Context windows live in model_context_windows.yaml, not in this file.
 #
 # Top-level keys must end with "_providers"; the prefix becomes the category:

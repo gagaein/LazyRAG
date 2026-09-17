@@ -19,6 +19,7 @@ import (
 )
 
 type catalogModel struct {
+	Vision                 bool     `yaml:"vision"`
 	Name                   string   `yaml:"name"`
 	Type                   string   `yaml:"type"`
 	FreeAutoSelectPriority int      `yaml:"free_auto_select_priority"`
@@ -159,6 +160,7 @@ func upsertDefaultModel(tx *gorm.DB, now time.Time, providerID, providerName str
 			ProviderName:           providerName,
 			Name:                   name,
 			ModelType:              modelType,
+			Vision:                 item.Vision,
 			MaxInputTokens:         maxInputTokens,
 			FreeAutoSelectPriority: item.FreeAutoSelectPriority,
 			FreeAutoSelectBaseURLs: freeAutoSelectBaseURLs,
@@ -170,7 +172,7 @@ func upsertDefaultModel(tx *gorm.DB, now time.Time, providerID, providerName str
 		}
 		return syncDefaultModelToUserGroups(
 			tx, now, providerID, providerName, name, modelType, maxInputTokens,
-			item.FreeAutoSelectPriority, freeAutoSelectBaseURLs,
+			item.FreeAutoSelectPriority, freeAutoSelectBaseURLs, item.Vision,
 		)
 	}
 	if err != nil {
@@ -182,6 +184,7 @@ func upsertDefaultModel(tx *gorm.DB, now time.Time, providerID, providerName str
 		Updates(map[string]any{
 			"provider_name":              providerName,
 			"model_type":                 modelType,
+			"vision":                     item.Vision,
 			"max_input_tokens":           maxInputTokens,
 			"free_auto_select_priority":  item.FreeAutoSelectPriority,
 			"free_auto_select_base_urls": freeAutoSelectBaseURLs,
@@ -192,7 +195,7 @@ func upsertDefaultModel(tx *gorm.DB, now time.Time, providerID, providerName str
 	}
 	return syncDefaultModelToUserGroups(
 		tx, now, providerID, providerName, name, modelType, maxInputTokens,
-		item.FreeAutoSelectPriority, freeAutoSelectBaseURLs,
+		item.FreeAutoSelectPriority, freeAutoSelectBaseURLs, item.Vision,
 	)
 }
 
@@ -230,12 +233,14 @@ func syncDefaultModelToUserGroups(
 	maxInputTokens *string,
 	freeAutoSelectPriority int,
 	freeAutoSelectBaseURLs string,
+	vision bool,
 ) error {
 	providerIDs := tx.Model(&orm.UserModelProvider{}).
 		Select("id").
 		Where("default_model_provider_id = ? AND deleted_at IS NULL", providerID)
 
 	updates := map[string]any{
+		"vision":                     vision,
 		"model_type":                 modelType,
 		"free_auto_select_priority":  freeAutoSelectPriority,
 		"free_auto_select_base_urls": freeAutoSelectBaseURLs,
@@ -305,6 +310,7 @@ func syncDefaultModelToUserGroups(
 			ProviderName:             providerName,
 			Name:                     modelName,
 			ModelType:                modelType,
+			Vision:                   vision,
 			MaxInputTokens:           maxInputTokens,
 			FreeAutoSelectPriority:   freeAutoSelectPriority,
 			FreeAutoSelectBaseURLs:   freeAutoSelectBaseURLs,

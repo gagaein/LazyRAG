@@ -55,6 +55,7 @@ export interface AddACLRequest {
     'permission': string;
 }
 export interface AddModelProviderGroupModelOpenAPIRequest {
+    'vision'?: boolean;
     /**
      * Optional override. When omitted, LLM/VLM windows are resolved from config/model_context_windows.yaml by model name and unknown names fall back to 128K.
      */
@@ -63,6 +64,7 @@ export interface AddModelProviderGroupModelOpenAPIRequest {
     'name': string;
 }
 export interface AddModelProviderGroupModelOpenAPIResponse {
+    'vision'?: boolean;
     'base_url': string;
     'group_name': string;
     'id': string;
@@ -3739,6 +3741,7 @@ export interface ListGrantPrincipalsResponse {
     'users'?: Array<GrantPrincipal>;
 }
 export interface ListModelProviderGroupModelsOpenAPIItem {
+    'vision'?: boolean;
     'availability': ListModelProviderGroupModelsOpenAPIItemAvailabilityEnum;
     'base_url'?: string;
     'capabilities'?: Array<string>;
