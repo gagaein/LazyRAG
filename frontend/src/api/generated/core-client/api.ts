@@ -55,16 +55,18 @@ export interface AddACLRequest {
     'permission': string;
 }
 export interface AddModelProviderGroupModelOpenAPIRequest {
-    'vision'?: boolean;
     /**
      * Optional override. When omitted, LLM/VLM windows are resolved from config/model_context_windows.yaml by model name and unknown names fall back to 128K.
      */
     'max_input_tokens'?: string;
     'model_type': string;
     'name': string;
+    /**
+     * Whether this LLM accepts image input
+     */
+    'vision'?: boolean;
 }
 export interface AddModelProviderGroupModelOpenAPIResponse {
-    'vision'?: boolean;
     'base_url': string;
     'group_name': string;
     'id': string;
@@ -78,6 +80,10 @@ export interface AddModelProviderGroupModelOpenAPIResponse {
     'provider_name': string;
     'user_model_provider_group_id': string;
     'user_model_provider_id': string;
+    /**
+     * Whether this LLM accepts image input
+     */
+    'vision': boolean;
 }
 export interface AddWordGroupConflictToGroupsRequest {
     'group_ids'?: Array<string>;
@@ -3741,7 +3747,6 @@ export interface ListGrantPrincipalsResponse {
     'users'?: Array<GrantPrincipal>;
 }
 export interface ListModelProviderGroupModelsOpenAPIItem {
-    'vision'?: boolean;
     'availability': ListModelProviderGroupModelsOpenAPIItemAvailabilityEnum;
     'base_url'?: string;
     'capabilities'?: Array<string>;
@@ -3766,6 +3771,10 @@ export interface ListModelProviderGroupModelsOpenAPIItem {
     'source': ListModelProviderGroupModelsOpenAPIItemSourceEnum;
     'user_model_provider_group_id'?: string;
     'user_model_provider_id'?: string;
+    /**
+     * Whether this LLM accepts image input
+     */
+    'vision': boolean;
 }
 
 export const ListModelProviderGroupModelsOpenAPIItemAvailabilityEnum = {
