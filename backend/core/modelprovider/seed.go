@@ -329,11 +329,12 @@ func syncDefaultModelToUserGroups(
 	return nil
 }
 
-// reconcileSenseNovaCatalogScope removes retired classic models and keeps the classic and Token Plan
-// model subsets from leaking into each other's default-seeded groups. User-added models are preserved.
-func reconcileSenseNovaCatalogScope(
+// reconcileCatalogScope removes retired defaults only from official endpoint groups.
+// User-added models and custom endpoints are preserved. SenseNova also separates
+// classic and Token Plan model subsets. Empty catalogs never trigger deletion.
+func reconcileCatalogScope(
 	tx *gorm.DB,
-	providerID, catalogBaseURL string,
+	providerID, supplierName, catalogBaseURL string,
 	models []catalogModel,
 ) error {
 	catalogNames := make(map[string]struct{}, len(models))
@@ -365,17 +366,18 @@ func reconcileSenseNovaCatalogScope(
 		return err
 	}
 
+	isSenseNova := strings.EqualFold(supplierName, "SenseNova")
 	classicURL := normalizeBaseURLForCompare(catalogBaseURL)
 	tokenPlanURL := normalizeBaseURLForCompare(sensenovaNewPlatformBaseURL)
 	deleteIDs := make([]string, 0)
 	for _, row := range rows {
 		groupURL := normalizeBaseURLForCompare(row.BaseURL)
-		if groupURL != classicURL && groupURL != tokenPlanURL {
+		if groupURL != classicURL && !(isSenseNova && groupURL == tokenPlanURL) {
 			continue
 		}
 		_, inCatalog := catalogNames[row.Name]
 		useTokenPlan := groupURL == tokenPlanURL
-		if !inCatalog || !shouldSeedSenseNovaModel(row.Name, useTokenPlan) {
+		if !inCatalog || (isSenseNova && !shouldSeedSenseNovaModel(row.Name, useTokenPlan)) {
 			deleteIDs = append(deleteIDs, row.ID)
 		}
 	}
@@ -440,10 +442,8 @@ func seedCatalog(ctx context.Context, db *gorm.DB, yamlPath, categorySuffix, for
 						return err
 					}
 				}
-				if strings.EqualFold(supplier.Name, "SenseNova") {
-					if err := reconcileSenseNovaCatalogScope(tx, providerID, supplier.BaseURL, supplier.Models); err != nil {
-						return err
-					}
+				if err := reconcileCatalogScope(tx, providerID, supplier.Name, supplier.BaseURL, supplier.Models); err != nil {
+					return err
 				}
 			}
 		}
