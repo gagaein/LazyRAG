@@ -19,13 +19,20 @@ def _llm_configuration() -> dict:
     return {**selected, **capabilities}
 
 
+def main_model_supports_vision() -> bool:
+    """Use the current request's declared capability without probing a model."""
+    if not is_model_role_available('llm'):
+        return False
+    config = _llm_configuration()
+    return config.get('vision') is True or str(config.get('type', '')).lower() == 'vlm'
+
+
 def select_vision_model_role() -> str:
     if is_model_role_available('vlm'):
         return 'vlm'
     if not is_model_role_available('llm'):
         raise VisionModelUnavailable('未配置视觉模型或主模型，请在模型设置中配置后重试。')
-    config = _llm_configuration()
-    if config.get('vision') is True or str(config.get('type', '')).lower() == 'vlm':
+    if main_model_supports_vision():
         return 'llm'
     raise VisionModelUnavailable(
         '主模型未声明支持多模态，请在添加 LLM 时勾选“是否支持多模态”，或配置图文模型后重试。',

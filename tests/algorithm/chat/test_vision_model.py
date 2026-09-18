@@ -44,3 +44,13 @@ def test_dynamic_metadata_is_request_scoped(monkeypatch):
     with lazyllm.new_session():
         inject_model_config({'llm': {'source': 'openai', 'model': 'text-only'}})
         assert 'vision' not in vm._llm_configuration()
+
+@pytest.mark.parametrize('config', [{'vision': True}, {'type': 'vlm'}])
+def test_visual_main_is_direct_even_when_separate_vlm_exists(monkeypatch, config):
+    configure(monkeypatch, config, roles=('llm', 'vlm'))
+    assert vm.main_model_supports_vision()
+
+
+def test_separate_vlm_does_not_make_text_main_visual(monkeypatch):
+    configure(monkeypatch, {'vision': False}, roles=('llm', 'vlm'))
+    assert not vm.main_model_supports_vision()

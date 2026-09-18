@@ -136,7 +136,8 @@ def vision_extractor(url: str, instruction: Optional[str] = None) -> Dict[str, A
     Supports common image formats (JPEG, PNG, GIF, WebP, BMP, TIFF).
     Uses a vision-language model to describe visual content in natural language.
     Use this for visual content from knowledge-base results or attached images
-    before answering questions that depend on what is visible in the image.
+    when their pixels are not already included in the current model request.
+    If the current-turn images are supplied directly, inspect them without this tool.
 
     Prefer passing the short filename shown in tool results or under Attached
     Files, or a ``local_path`` field from the source result. Avoid passing
