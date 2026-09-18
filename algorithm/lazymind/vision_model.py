@@ -19,7 +19,6 @@ def _llm_configuration() -> dict:
     return {**selected, **capabilities}
 
 
-
 def select_vision_model_role() -> str:
     if is_model_role_available('vlm'):
         return 'vlm'

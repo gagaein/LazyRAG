@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 import lazyllm
-from lazyllm import AutoModel
 from lazyllm.tools.agent import ToolExecutionError
 from lazyllm.tools import fc_register
 from lazymind.chat.engine.tools.host_file_resolution import FileResolution, stage_input_file
