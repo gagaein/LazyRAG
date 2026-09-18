@@ -181,26 +181,36 @@ model_providers:
           type: embed
         - name: doubao-embedding-vision-241215
           type: cross_modal_embed
+        # Image input verified against https://docs.volcengine.com/docs/ark/model-list?lang=zh (2026-09-18).
         - name: doubao-seed-1-6-250615
           type: llm
+          vision: true
         - name: doubao-seed-1-6-251015
           type: llm
+          vision: true
         - name: doubao-seed-1-6-flash-250828
           type: llm
+          vision: true
         - name: doubao-seed-1-6-vision-250815
           type: vlm
         - name: doubao-seed-1-8-251228
           type: llm
+          vision: true
         - name: doubao-seed-2-0-code-preview-260215
           type: llm
+          vision: true
         - name: doubao-seed-2-0-lite-260215
           type: llm
+          vision: true
         - name: doubao-seed-2-0-mini-260215
           type: llm
+          vision: true
         - name: doubao-seed-2-0-pro-260215
           type: llm
+          vision: true
         - name: doubao-seed-code-preview-251028
           type: llm
+          vision: true
         - name: doubao-seedream-5-0-pro-260628
           type: image_editing
         - name: doubao-seedream-5-0-260128
@@ -552,8 +562,10 @@ model_providers:
           The built-in catalog covers popular models from OpenAI, Anthropic, Google, DeepSeek, Qwen, Z.AI GLM, Kimi, Grok, MiniMax, and NVIDIA, including several free models with tool-calling support plus image, video, text-to-speech, and speech-to-text models.
       base_url: "https://openrouter.ai/api/v1/"
       models:
+        # Image input verified against https://openrouter.ai/api/v1/models (2026-09-18).
         - name: z-ai/glm-5.3-flash
           type: llm
+          vision: true
           free_auto_select_priority: 1
         - name: z-ai/glm-5.3
           type: llm
@@ -1011,8 +1023,10 @@ model_providers:
         - name: glm-5.2
           type: llm
         # Token Plan is free during public beta: https://platform.sensenova.cn/
+        # Image input: https://github.com/OpenSenseNova/SenseNova6.7/blob/main/API_CN.md (2026-09-18).
         - name: sensenova-6.7-flash-lite
           type: llm
+          vision: true
           free_auto_select_priority: 1
           free_auto_select_base_urls: ["https://token.sensenova.cn/v1/chat/completions/"]
         - name: sensenova-u1-fast
