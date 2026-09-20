@@ -1,6 +1,6 @@
 # 桌面安装包瘦身与能力按需安装
 
-状态：**构建裁剪、RAG 后置及案例 warmup 下载已实现；Windows/Linux 组件已有本地产物，等待 Windows/macOS CI 完整安装包与真机回归**。修改日期：2026-09-20。云端依赖清单保持原样；用户自行上传组件文件到 ModelScope，不由开发脚本发布到云。
+状态：**构建裁剪、RAG 后置及案例 warmup 下载已实现；Windows CI 已产出 448.30 MiB 安装包，Mac 本地组件验证已通过，完整业务回归仍待完成**。修改日期：2026-09-20。云端依赖清单保持原样；用户自行上传组件文件到 ModelScope，不由开发脚本发布到云。
 
 在 Mac 上自行打包并上传，请直接按 [Mac 构建、上传与安装验证流程](../../desktop/INSTALL.zh-CN.md) 执行；其中使用最终 `.app` 内的精简环境验证本地及云端 RAG 组件。
 
@@ -89,13 +89,27 @@ Windows 原生验证：6 项组件测试通过，包含真实 ZIP 经 HTTPS 下�
 - 用户已上传 ModelScope；实际云端下载后六阶段验证全部通过，验证后应用签名复查通过，报告为 `desktop/dist/component-check/darwin-arm64/cloud-report.json`。尚未执行完整业务界面回归或 Developer ID 签名/公证；此组件应与本次应用配套使用。
 - 换电脑交接、完整 ARM64 构建步骤及尚待实现的 Intel 适配清单见 [Mac 打包文档](../../desktop/INSTALL.zh-CN.md)。当前没有可直接运行的 Intel Mac 完整打包入口。
 
-## 体积证据与预估
+## 体积实测与历史估算
 
-- 历史 Windows installer：用户提供的 9 月 9 日产物 **480.91 MiB**；未拿到该文件独立复测。
+2026-09-20 用户提供两次 GitHub 构建摘要，并核对公开运行页面及本地提交历史：主仓构建使用 `0e7b4fc0f`，优化分支以该提交为基础，仅追加本轮优化和 Windows junction 修复。当前采用这组结果作为对照：
+
+| 构建 | 提交 | Windows installer |
+| --- | --- | ---: |
+| [主仓原版](https://github.com/LazyAGI/LazyMind/actions/runs/35496179155) | `0e7b4fc0f` | **546.08 MiB** |
+| [三个优化开关开启](https://github.com/CarlosShaoting/LazyRAG/actions/runs/35503879386) | `7587bcb7a` | **448.30 MiB**（470,079,386 字节） |
+| 实际差值 | | **减少 97.78 MiB / 17.91%** |
+
+优化版文件：`LazyMind-windows-x64-installer-0.3.0-alpha.0-7587bcb7.exe`；SHA-256：`85f70f95542454e2eae41b26371a002f2e0b142e163fd19c73c22717ab500063`；签名状态 `NotSigned`。这两次是相同源码基线、不同仓库的构建；仍可能存在动态依赖版本或构建环境差异，不等同于严格锁定所有依赖的 A/B 实验。未下载并逐项审计最终 EXE 内容，不能仅凭摘要确认全部文件组成或业务功能。
+
+这次 Python 裁剪报告为 **1369.05 → 1040.38 MiB**，减少 **328.67 MiB** 展开文件（缓存 102.64 MiB、测试文件 40.85 MiB、无关火山服务 185.18 MiB）。**报告产生于 RAG 拆包之前**，所以其中仍列出 spaCy、PyArrow、FAISS 等；这些行不能用于判断最终安装包是否仍包含完整 RAG。RAG 后置实际内容以同次构建 `windows-python-components` 的 catalog 为准。展开文件体积、单独组件 ZIP 和 NSIS installer 的压缩方式不同，不能直接相减。
+
+本轮减少的是初始安装包下载量。后续启用 RAG 和首次 warmup 案例下载仍会产生额外流量；不能把 97.78 MiB 差值解释为启用全部功能后的总流量减少。
+
+- 历史 Windows installer：用户提供的 9 月 9 日产物 **480.91 MiB**；未拿到该文件独立复测。该版本比本次主仓基线旧，不再用作本轮优化收益的主要对照。
 - 真实 Ark SDK `5.0.50` 隔离环境：展开文件 **214.73 → 29.55 MiB**，移除 **185.18 MiB / 25,801 个文件**；保留的 Ark 图片/视频路径通过 mock 请求。
 - Linux/Python 3.11 完整 algorithm 验证环境：第一轮裁剪前约 **1233.20 MiB**，裁剪后约 **1007.77 MiB**；随后 RAG 移出约 **285.87 MiB**，DashScope SDK 留在基础包，基础环境约 **721.90 MiB**。这些是展开体积，不是 installer 大小，也不含全部桌面资源。
 - 该次实际组件 ZIP：RAG 约 **89.5 MiB**。生成日期、依赖版本、是否含 bytecode 和平台会影响精确结果，最终看对应 catalog 的 `sizeBytes`。
-- 对本轮“保留 Skill 共用库”的范围，Windows 可先按 **约 360–425 MiB** 做低置信度预算，即相对历史 480.91 MiB 少约 **55–120 MiB（约 11%–25%）**。这是跨平台估算，不是已测 Windows 结果；不能把 Linux ZIP 大小直接从 NSIS 成品相减。旧计划中 280–350 MiB 涉及更多共享库/资源后置，不是这次承诺。
+- 历史低置信度估算 **360–425 MiB** 基于旧的 480.91 MiB 包及跨平台依赖样本，现已由 **448.30 MiB 实测**替代。旧计划中 280–350 MiB 涉及更多共享库/资源后置，也不作为本轮结果。
 
 ## GitHub 打包和对照方法
 
