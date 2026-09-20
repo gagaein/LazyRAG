@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import re
+import stat
 
 
 SDK_NAME = 'volcengine-python-sdk'
@@ -17,13 +18,31 @@ SDK_MODULE = re.compile(r'\bvolcenginesdk[A-Za-z0-9_]+\b')
 TEST_PACKAGES = {'numpy', 'scipy', 'pandas', 'sklearn', 'spacy', 'thinc'}
 
 
-def files_under(root):
+def is_link(path):
+    # Python 3.11 has no Path.is_junction(). uv's Windows Python aliases are
+    # directory junctions: is_symlink()/os.walk(followlinks=False) miss them.
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return False
+    return (stat.S_ISLNK(info.st_mode) or
+            bool(getattr(info, 'st_file_attributes', 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT))
+
+
+def regular_directories(root):
+    if is_link(root):
+        return
     for directory, dirs, files in os.walk(root, followlinks=False):
         base = Path(directory)
-        dirs[:] = sorted(name for name in dirs if not (base / name).is_symlink())
+        dirs[:] = sorted(name for name in dirs if not is_link(base / name))
+        yield base, files
+
+
+def files_under(root):
+    for base, files in regular_directories(root):
         for name in sorted(files):
             path = base / name
-            if not path.is_symlink():
+            if not is_link(path):
                 yield path
 
 
@@ -94,7 +113,7 @@ def bytecode_has_source(path):
 def trim_runtime(runtime, apply, extra_sources=()):
     runtime = runtime.resolve()
     roots = [runtime / 'runtimes/python', runtime / 'deps/python']
-    if not all(p.is_dir() and not p.is_symlink() and p.resolve().is_relative_to(runtime) for p in roots):
+    if not all(p.is_dir() and not is_link(p) and p.resolve().is_relative_to(runtime) for p in roots):
         raise ValueError('Expected a staged runtime with runtimes/python and deps/python directories')
     paths = [p for root in roots for p in files_under(root)]
     sizes = {p: p.stat().st_size for p in paths}
@@ -137,12 +156,14 @@ def trim_runtime(runtime, apply, extra_sources=()):
             after[bucket] += size
     if apply:
         for path in sorted(removals):
-            path.unlink()
+            path.unlink(missing_ok=True)
         # Remove empty directories only; preserve distribution metadata/licenses.
+        # Walk top-down to exclude junctions before reversing for child-first
+        # removal. A bottom-up os.walk would already have entered their targets.
         for root in roots:
-            for directory, _, _ in os.walk(root, topdown=False, followlinks=False):
-                path = Path(directory)
-                if not path.is_symlink() and path != root and not any(path.iterdir()):
+            directories = [path for path, _ in regular_directories(root)]
+            for path in reversed(directories):
+                if not is_link(path) and path != root and not any(path.iterdir()):
                     path.rmdir()
     return {
         'schema_version': 1,

@@ -1,8 +1,11 @@
 import importlib.util
 import json
+import os
 from pathlib import Path
+import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / 'desktop/scripts/prune-python-runtime.py'
@@ -130,6 +133,73 @@ class PrunePythonRuntimeTest(unittest.TestCase):
             self.skipTest('Creating symlinks requires permission on this Windows host')
         pruning.trim_runtime(self.runtime, True)
         self.assertTrue(bytecode.exists())
+
+    def junction(self, link, target):
+        subprocess.run(['cmd.exe', '/d', '/c', 'mklink', '/J', str(link), str(target)],
+                       check=True, capture_output=True)
+        # Remove the junction before TemporaryDirectory cleans the fixture.
+        self.addCleanup(lambda: os.rmdir(link) if os.path.lexists(link) else None)
+
+    @unittest.skipUnless(os.name == 'nt', 'Requires a real Windows directory junction')
+    def test_uv_python_junction_alias_is_counted_and_pruned_once(self):
+        python_root = self.runtime / 'runtimes/python'
+        versioned = python_root / 'cpython-3.11.15-windows-x86_64-none'
+        source = versioned / 'Lib/__future__.py'
+        source.parent.mkdir(parents=True)
+        source.write_bytes(b'# original standard library\n')
+        cached = source.parent / '__pycache__/__future__.cpython-311.pyc'
+        cached.parent.mkdir()
+        cached.write_bytes(b'cached bytecode')
+        alias = python_root / 'cpython-3.11-windows-x86_64-none'
+        self.junction(alias, versioned)
+        expected = source.stat().st_size + cached.stat().st_size
+        dry = pruning.trim_runtime(self.runtime, False)
+        report = pruning.trim_runtime(self.runtime, True)
+        self.assertEqual(dry['python_bytes_before'], expected)
+        self.assertEqual(dry['candidate_removed_files'], 1)
+        self.assertEqual(report['candidate_removed_files'], 1)
+        self.assertEqual(report['python_bytes_after'], source.stat().st_size)
+        self.assertFalse(cached.exists())
+        self.assertEqual((alias / 'Lib/__future__.py').read_bytes(), source.read_bytes())
+        self.assertEqual(pruning.trim_runtime(self.runtime, True)['candidate_removed_files'], 0)
+
+    @unittest.skipUnless(os.name == 'nt', 'Requires a real Windows directory junction')
+    def test_junction_target_is_not_scanned_or_cleaned(self):
+        outside = self.root / 'external-python'
+        outside.mkdir()
+        (outside / 'a.py').write_bytes(b'original')
+        cached = outside / 'a.pyc'
+        cached.write_bytes(b'cache')
+        empty = outside / 'empty'
+        empty.mkdir()
+        self.junction(self.site / 'linked', outside)
+        # A linked source root must be excluded too, not just child links.
+        self.assertEqual(list(pruning.files_under(self.site / 'linked')), [])
+        pruning.trim_runtime(self.runtime, True)
+        self.assertTrue(cached.is_file())
+        self.assertTrue(empty.is_dir())
+
+    def test_disappearing_bytecode_during_deletion_is_harmless(self):
+        self.put('package/a.py')
+        cached = self.put('package/__pycache__/a.cpython-311.pyc').resolve()
+        original_unlink = Path.unlink
+
+        def raced_unlink(path, *args, **kwargs):
+            if path == cached:
+                original_unlink(path)  # Another cleanup already removed it.
+            return original_unlink(path, *args, **kwargs)
+
+        with patch.object(Path, 'unlink', raced_unlink):
+            pruning.trim_runtime(self.runtime, True)
+        self.assertFalse(cached.exists())
+
+    def test_permission_errors_are_not_silently_ignored(self):
+        self.put('package/a.py')
+        cached = self.put('package/a.pyc')
+        with patch.object(Path, 'unlink', side_effect=PermissionError('access denied')):
+            with self.assertRaises(PermissionError):
+                pruning.trim_runtime(self.runtime, True)
+        self.assertTrue(cached.exists())
 
     def test_refuses_non_runtime_directory(self):
         with self.assertRaises(ValueError):

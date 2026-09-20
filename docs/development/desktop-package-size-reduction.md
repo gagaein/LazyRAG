@@ -87,6 +87,10 @@ Windows 原生验证：6 项组件测试通过，包含真实 ZIP 经 HTTPS 下�
 
 ## GitHub 打包和对照方法
 
+Windows CI 裁剪阶段 `__future__.cpython-311.pyc` 报 `WinError 2` 的修复：uv 创建的 `cpython-3.11-*` 目录联接指向 `cpython-3.11.15-*`，Python 3.11 的 `is_symlink()` 和 `os.walk(followlinks=False)` 没有排除该联接，造成重复统计和重复删除。扫描和空目录清理现统一跳过 Windows reparse points；待删除文件已消失时允许跳过，权限错误仍然报错。原生 Windows 回归先复现相同异常，修复后 15 项裁剪测试全部通过；Linux 13 项通过/2 项 Windows 专属测试跳过，相关 Desktop Node 测试 43 项通过。这是构建脚本修复，与尚未修复的 Milvus `WinError 183` 是两个问题。
+
+修复推送后应在 Actions **重新点 Run workflow，选择 `cst/installer_opt` 最新提交**；失败任务的 “Re-run jobs” 仍使用旧提交，不会获得修复。无需修改 runner 的 `D:\a\...` 路径，也无需关闭三个优化开关。
+
 1. 推送 LazyMind 的本轮改动，**不要加入 `algorithm/lazyllm` 的既有指针差异**。在 Actions 手动运行 **Windows Desktop Installer**，选分支/提交，保持 `prune_python=true`、`defer_python=true`。macOS 同理。普通分支 push 不一定触发 installer workflow。
 2. 下载主 installer、`windows-python-components` 和 `windows-python-size-report`（macOS 对应替换前缀）。主 installer 的 `Size` 才是最终下载量；裁剪报告记录的是拆组件之前的 Python 清理收益，catalog 另外记录后置组件体积，不可混算。
 3. 如需同提交完整对照，等精简构建结束后再运行一次，**`prune_python`、`defer_python`、`defer_history` 三个开关都设 false**。只关 `prune_python` 仍会后置组件。构建依赖仍有版本范围，比较前核对报告版本；同 ref 并发构建会互相取消。
