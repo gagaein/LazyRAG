@@ -4,6 +4,10 @@
 
 安装包包含基础 Python、聊天和共用依赖；RAG 专用依赖独立生成 ZIP，用户在应用内按需安装。Workflow 演示案例在首次启动 warmup 时自动下载。两者是不同的资源、不同的下载时机。
 
+## 后续交付平台与实施交接
+
+目标发布平台为 **Windows x64 一个版本、Mac ARM64 与 Mac Intel x64 两个架构版本**。本页现有可执行 Mac 流程仍为 ARM64；Intel 构建入口尚未实现，不要直接套用 ARM64 命令。五项进一步瘦身和 Intel 入口的具体实现要求已写入 [第二轮开发交接计划](../docs/development/desktop-package-size-next-phase.md)，由另一台电脑的 GPT 实施后再更新本页对应操作命令。
+
 ## 0. 换电脑或交给同事打包：先确认架构
 
 在同事的 Mac 原生终端运行：
