@@ -81,7 +81,7 @@ if (!cloudBaseURL && cloudOAuthCallbackMode !== "direct") {
   process.exit(2);
 }
 
-const supportedTargets = new Set(["darwin/arm64", "windows/amd64"]);
+const supportedTargets = new Set(["darwin/arm64", "darwin/amd64", "windows/amd64"]);
 const target = `${options.platform}/${options.arch}`;
 if (!supportedTargets.has(target)) {
   console.error(`unsupported desktop runtime target: ${target}`);

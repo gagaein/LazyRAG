@@ -6,7 +6,7 @@
 
 ## 后续交付平台与实施交接
 
-目标发布平台为 **Windows x64 一个版本、Mac ARM64 与 Mac Intel x64 两个架构版本**。本页现有可执行 Mac 流程仍为 ARM64；Intel 构建入口尚未实现，不要直接套用 ARM64 命令。五项进一步瘦身和 Intel 入口的具体实现要求已写入 [第二轮开发交接计划](../docs/development/desktop-package-size-next-phase.md)，由另一台电脑的 GPT 实施后再更新本页对应操作命令。
+目标发布平台为 **Windows x64 一个版本、Mac ARM64 与 Mac Intel x64 两个架构版本**。ARM64 继续按第 1～8 节操作，Intel 原生构建使用第 9 节新入口（本机没有 Intel 真机，尚待原生验收）。第二轮瘦身实现与平台验收记录见 [第二轮开发交接计划](../docs/development/desktop-package-size-next-phase.md)。
 
 ## 0. 换电脑或交给同事打包：先确认架构
 
@@ -21,9 +21,9 @@ sw_vers -productVersion
 | 目标电脑 | 架构 | 当前流程 |
 | --- | --- | --- |
 | M 系列 Mac | `arm64` | 本文第 1～8 节可用；不同代 M 芯片无需分别打包 |
-| Intel Mac | `x86_64`，Node 显示 `x64` | 需要单独的 Intel 应用和 `darwin-amd64` RAG 包；仓库目前没有完整的 Intel 构建入口，见第 9 节 |
+| Intel Mac | `x86_64`，Node 显示 `x64` | 使用第 9 节原生 x64 入口，生成 Intel 应用和 `darwin-amd64` RAG 包；真机验收待完成 |
 
-**当前脚本不是通用 Mac 构建脚本。** 不要在 Intel Mac 或 M 系列的 Rosetta 终端直接运行 `make desktop-darwin-arm64`；它硬编码了 ARM64 的飞书 CLI、manifest、Electron 架构和输出路径，会混入错误架构的文件。也不能把 ARM64 ZIP 改名为 x64，或只给 Electron 加 `--x64`。
+**按目标架构选择入口，并在对应原生 Mac 上构建。** ARM64 使用 `make desktop-darwin-arm64`，Intel 使用 `make desktop-darwin-x64`。脚本检查宿主、Node、Go 和 Python 架构，拒绝 Rosetta 或交叉混用；内部共用流程按目标选择飞书 CLI、manifest、Electron 和输出路径。不能把 ARM64 ZIP 改名为 x64。
 
 CPU 架构与 macOS 版本是两项独立要求。本次 ARM64 构建使用的 `scipy==1.17.1` wheel 标记为 `macosx_14_0_arm64`，因此不能声称支持 macOS 13 及更旧系统；这也不代表已验证所有 macOS 14+ 版本。若需要兼容更旧系统，要另行约束依赖版本、检查原生库最低系统版本并在目标系统实测。
 
@@ -99,6 +99,8 @@ export LAZYMIND_DESKTOP_DEFER_PYTHON=true
 export LAZYMIND_DESKTOP_DEFER_HISTORY=true
 export LAZYMIND_PYTHON_COMPONENT_BASE_URL='https://modelscope.cn/datasets/CarlosShaoting/lazymind-cst/resolve/master/'
 export LAZYMIND_RELEASE_BUILD=false
+# 可选：纯 Python 相同依赖共享；默认 false，仅审计不移动
+export LAZYMIND_DESKTOP_SHARE_PYTHON=true
 ```
 
 `LAZYMIND_RELEASE_BUILD=false` 使用本地源码构建方式，随应用带上主仓库记录的 LazyLLM 源码。本地测试不需要创建 release tag。
@@ -253,23 +255,41 @@ open desktop/dist/mac-arm64/LazyMind.app
 
 后续若改用 GitHub 构建安装包，也要上传那次 Actions 的 `macos-python-components` 附件中配套的原始 RAG ZIP，不能默认沿用这次本地产物。详细实现、体积记录和已知问题见 [开发文档](../docs/development/desktop-package-size-reduction.md)。
 
-## 9. Intel Mac 打包交接清单（尚未实现，不能直接照 ARM64 命令执行）
+## 9. Intel Mac 原生构建入口（代码已实现，真机验收待完成）
 
-如果同事用的是 Intel Mac，应先完成下面的构建适配，再进行原生构建和验证。本节是实现清单，**不是已经验证可运行的 x64 打包命令**。
+在原生 Intel Mac 上完成第 1 节依赖和源码准备：`uname -m` 应为 `x86_64`，`node -p process.arch` 为 `x64`，`go env GOHOSTARCH GOARCH` 均为 `amd64`。不要在 M 系列的 Rosetta 终端代替 Intel 真机验收。
 
-| 位置 | 必须适配的内容 |
+沿用第 2 节的优化环境变量，选择一条命令：
+
+```bash
+# ad-hoc 测试 ZIP
+LAZYMIND_DESKTOP_PACKAGE_KIND=zip LAZYMIND_DESKTOP_SIGNING_MODE=adhoc make desktop-darwin-x64
+# 或已有 Developer ID 证书时构建 DMG
+make desktop-darwin-x64-dmg
+```
+
+| 产物 | Intel 路径 |
 | --- | --- |
-| `desktop/scripts/build-darwin-arm64.sh`、`Makefile` | 新增 x64 入口或统一参数化；校验宿主/目标架构，隔离 build/dist 路径 |
-| 飞书 CLI 下载和校验 | 使用官方提供的 Intel 产物及其真实 SHA；不能沿用 `darwin-arm64` URL/哈希，先确认发布资源是否存在 |
-| Python 和 Go 服务 | 原生 x86_64 Python 3.11.15 及其 wheels、amd64 Go/CGO 二进制；不可复制 ARM64 环境 |
-| `desktop/scripts/write-runtime-manifest.mjs` | 当前支持列表只有 `darwin/arm64`、`windows/amd64`；增加并测试 `darwin/amd64`，同时检查相关运行时校验 |
-| `desktop/electron/package.json` | 增加 Electron `--x64` 打包脚本及对应 ZIP/DMG 输出 |
-| `desktop/electron/electron-builder.config.cjs` | 组件输出目录目前固定 `darwin-arm64`，需按目标架构生成；保留包外拆包、组件原生库签名和最终应用签名顺序 |
-| CI、验证和文档 | 如需 CI，另配 Intel runner；增加 manifest/架构测试，用最终 Intel `.app` 验证本地和云端组件及签名 |
+| 应用 | `desktop/dist/mac/LazyMind.app`（electron-builder x64 默认目录名是 `mac`） |
+| 应用 ZIP | `desktop/dist/LazyMind-darwin-x64.zip` |
+| DMG | `desktop/dist/LazyMind-macos-x64.dmg` |
+| RAG 组件目录 | `desktop/dist/python-components/darwin-amd64/` |
+| 中间环境与报告 | `desktop/build/darwin-x64/` |
 
-命名约定要区分：macOS `uname` 为 `x86_64`，Node/Electron 使用 `x64`，Go 和本项目组件 catalog 使用 `amd64`。期望 Intel 组件名为 `lazymind-python-rag-darwin-amd64-cp311-<revision>.zip`，其 SHA、revision 和 fingerprint 由真实构建生成，不能手写或复用 ARM64 值。
+```bash
+MAC_RUNTIME="$(pwd)/desktop/dist/mac/LazyMind.app/Contents/Resources/runtime"
+MAC_PYTHON="$MAC_RUNTIME/deps/python/algorithm/bin/python"
+"$MAC_PYTHON" -B desktop/scripts/verify-python-components.py \
+  --runtime "$MAC_RUNTIME" \
+  --bundle-dir "$(pwd)/desktop/dist/python-components/darwin-amd64" \
+  --report "$(pwd)/desktop/dist/component-check/darwin-amd64/local-report.json"
+codesign --verify --deep --strict desktop/dist/mac/LazyMind.app
+(cd desktop/dist/python-components/darwin-amd64 && shasum -a 256 -c SHA256SUMS)
+```
 
-完成适配后，先检查 Go 可执行文件、Python、Electron 和组件内 `.so/.dylib` 的实际架构，再重复第 3～7 节的配套校验、Milvus 持久化、云端下载及业务试用。所有路径和 catalog 架构断言需要换成 Intel 构建的实际值。Intel 和 ARM64 原始组件 ZIP 可以共存于同一 ModelScope 数据集，应用各自使用自己的 catalog 地址。
+第 3 节 catalog 对照代码中的路径换成表内 Intel 路径，架构断言换为 `amd64`。按 catalog 打印的**实际文件名**上传原始 RAG ZIP，之后去掉 `--bundle-dir` 再做云端验证。复用同一份字体及案例资源，保留已上传的 ARM64、Windows RAG 文件。
+
+本机已验证 Intel 飞书 CLI 原始下载的 SHA 和 Mach-O `x86_64` 架构，并测试了 Intel manifest；**没有构建/运行完整 Intel 应用**，不能据此宣称 Intel 的 Python wheels、最低系统版本、签名或业务功能已验收。需由 Intel 机器完成原生构建及第 7 节回归。
 
 ## 10. 本次 ARM64 已完成的参考结果
 
@@ -281,3 +301,54 @@ open desktop/dist/mac-arm64/LazyMind.app
 - 应用为本地 ad-hoc 测试包；没有完成 Developer ID/公证、全部业务界面或其他 macOS 版本验证。
 
 这些记录用于核对本次交付，**不是另一台机器重新构建后必须得到的文件名或哈希**。重新构建仍以新应用中的 catalog 为准。
+
+## 11. 第二轮资源、共享开关与 Windows 操作
+
+### Python 共享和最终体积报告
+
+`LAZYMIND_DESKTOP_SHARE_PYTHON` 默认 `false`：审计候选，不改变三个环境。设置 `true` 才共享相同内容的纯 Python wheel；GitHub workflow 的对应输入是 `share_python`。Windows 与 Intel 的原生搬迁验收完成前，发布构建可保持关闭。切换回不共享模式应执行完整干净构建，`resume` 不会恢复已移走的包。
+
+报告位于最终 runtime 的 `config/python-sharing.json`，包含共享包、环境、实际节省字节和跳过原因；相同包不是全局暴露给所有环境，而是各环境通过相对 `.pth` 引用自己的共享目录。RAG 拆包先于共享，版本/RECORD 内容不改，catalog 继续绑定同一逻辑依赖集。
+
+最终体积报告：`desktop/build/<目标>/final-runtime-size.json`，区分应用、解释器、各 venv、shared、外置 RAG、字体与最终压缩产物。Mac 的报告在封装后生成；Windows 在 payload 封装前统计实际展开 runtime，完成后补记 EXE/ZIP 大小。不能把展开体积直接当成安装包节省。
+
+### 新增一次性的 PDF 字体上传
+
+三个平台共用 [ModelScope 数据集](https://modelscope.cn/datasets/CarlosShaoting/lazymind-cst) `master` 根目录。上传 `desktop/dist/pdf-font/` 中的以下 **TTF 原文件**，不用压成 ZIP；同时保留/分发 `NotoSansSC-OFL.txt` 许可证。
+
+- 文件名：`lazymind-pdf-NotoSansSC-a3041811a78c361b.ttf`。
+- 大小：17,772,300 字节（16.95 MiB）。
+- SHA-256：`a3041811a78c361b1de50f953c805e0244951c21c5bd412f7232ef0d899af0da`。
+- 上传后的目标 URL：`https://modelscope.cn/datasets/CarlosShaoting/lazymind-cst/resolve/master/lazymind-pdf-NotoSansSC-a3041811a78c361b.ttf`。
+
+该文件在本轮交付时**尚未上传**，URL 是构建描述中的目标地址。构建不访问此 URL。上传前新桌面包首次中文 PDF 导出会提示字体下载失败；上传后可直接重试，无需重打应用。用户缓存位于 runtime 的 `deps/pdf-font/<sha>/`，第二次可离线复用，损坏缓存会重新下载。普通 PDF 阅读不触发下载，Web/Docker 静态字体保持原样。
+
+上传后先核对真实下载字节，再在应用中验证中文可搜索 PDF、翻译导出、重启后离线导出与 Mac 签名：
+
+```bash
+curl --fail --location --proto '=https' --proto-redir '=https' \
+  'https://modelscope.cn/datasets/CarlosShaoting/lazymind-cst/resolve/master/lazymind-pdf-NotoSansSC-a3041811a78c361b.ttf' \
+  --output /tmp/lazymind-pdf-font-cloud.ttf
+shasum -a 256 /tmp/lazymind-pdf-font-cloud.ttf
+# 应与上面的完整 SHA-256 一致
+```
+
+### Windows x64 原生构建与搬迁验收
+
+在原生 Windows PowerShell、仓库根目录，安装现有 Windows 构建要求的 Node/pnpm、Go、uv 和 Git；不用 WSL Python 代替 Windows Python。先检出同一提交并初始化 LazyLLM 子模块。
+
+```powershell
+$env:LAZYMIND_RELEASE_BUILD = 'false'
+$env:LAZYMIND_DESKTOP_PRUNE_PYTHON = 'true'
+$env:LAZYMIND_DESKTOP_DEFER_PYTHON = 'true'
+$env:LAZYMIND_DESKTOP_DEFER_HISTORY = 'true'
+# 开启共享用于原生验收；未验收的发布包可保持 false
+$env:LAZYMIND_DESKTOP_SHARE_PYTHON = 'true'
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File desktop/scripts/build-windows-x64.ps1 installer
+```
+
+RAG 产物在 `desktop/dist/python-components/windows-amd64/`；字体目录同上。新构建移除 staging 中的 Mac Core 开发二进制和 LazyLLM 文档，不删除源文件。解释器别名规范化使用唯一真实捆绑 Python，先检查三个 venv 都能启动，再删除 junction，输出 `runtime/config/python-aliases.json`；异常直接停止构建。
+
+在 Windows 上还需要实际安装 EXE 到含中文/空格路径，确认原构建路径不可用时 warmup 能完成，三个 Python 服务、登录、聊天、飞书、Skill 与 RAG 均能启动；覆盖重复启动、覆盖升级、`resume-installer` 和 `python-runtime.zip` 内容检查。本机仅做了 Windows runtime-manager 测试二进制的交叉编译，不能替代这些原生运行测试。
+
+已有 Windows `milvus-lite==3.0` 的 `WinError 183` 尚未修复，本轮没有静默改第三方源码或旧组件校验值；显式 flush/重启持久化仍需单独验收。

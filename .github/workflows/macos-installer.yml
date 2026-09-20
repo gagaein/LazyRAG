@@ -17,6 +17,11 @@ on:
         required: false
         type: boolean
         default: true
+      share_python:
+        description: "Share identical pure Python wheels (opt-in; native platform acceptance required)"
+        required: false
+        type: boolean
+        default: false
       prune_python:
         description: "Trim unused Python SDK services and test files"
         required: false
@@ -43,6 +48,11 @@ on:
         required: false
         type: boolean
         default: true
+      share_python:
+        description: "Share identical pure Python wheels (opt-in; native platform acceptance required)"
+        required: false
+        type: boolean
+        default: false
       prune_python:
         description: "Trim Python runtime (disable for a same-commit size comparison)"
         required: false
@@ -67,6 +77,7 @@ env:
   LAZYMIND_DESKTOP_DEFER_HISTORY: ${{ inputs.defer_history && 'true' || 'false' }}
   LAZYMIND_DESKTOP_DEFER_PYTHON: ${{ inputs.defer_python && 'true' || 'false' }}
   LAZYMIND_PYTHON_COMPONENT_BASE_URL: ${{ vars.LAZYMIND_PYTHON_COMPONENT_BASE_URL }}
+  LAZYMIND_DESKTOP_SHARE_PYTHON: ${{ inputs.share_python && 'true' || 'false' }}
   LAZYMIND_DESKTOP_PRUNE_PYTHON: ${{ inputs.prune_python && 'true' || 'false' }}
 
 jobs:
@@ -600,6 +611,18 @@ jobs:
           path: desktop/dist/python-components/
           if-no-files-found: ignore
           retention-days: 14
+
+      - name: Upload PDF font and final runtime reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: macos-desktop-optional-resources
+          path: |
+            desktop/dist/pdf-font/
+            desktop/build/*/final-runtime-size.json
+            desktop/build/*/runtime/config/python-sharing.json
+            desktop/dist/mac*/LazyMind.app/Contents/Resources/runtime/config/python-sharing.json
+          if-no-files-found: ignore
 
       - name: Upload Python size report
         if: always()

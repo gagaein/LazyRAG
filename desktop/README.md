@@ -8,6 +8,7 @@ Desktop mode wraps the existing host-process Local runtime in an Electron shell.
 
 | Platform | Local | Desktop |
 |----------|-------|---------|
+| macOS Intel x64 | `make local-up` / `make local-down` | `make desktop-darwin-x64` / `make desktop-darwin-x64-dmg` (native Intel validation pending) |
 | macOS arm64 | `make local-up` / `make local-down` | `make desktop-darwin-arm64` (internal ZIP) / `make desktop-darwin-arm64-dmg` (signed DMG) |
 | Windows x64 | `make local-win-up` / `make local-win-down` | `make desktop-windows-x64` (portable ZIP) / `make desktop-windows-x64-installer` (installer) |
 

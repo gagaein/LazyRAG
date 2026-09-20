@@ -6,9 +6,9 @@
 
 **术语澄清：ModelScope 是依赖包托管位置，不是 DashScope SDK。** 本轮保持 DashScope SDK 随基础包安装，不改变通义功能的依赖方式。此前 Linux 测得 SDK 加独占依赖压缩仅约 4.6 MiB，单独后置收益很小，已撤回该拆分。
 
-## 第二轮待实施计划
+## 第二轮实施记录
 
-用户已确认继续考虑五项优化：Windows 排除 Mac 开发二进制、排除 LazyLLM 文档、解释器别名去重、相同 Python 依赖共享、PDF 字体后置。**本次仅交付计划，由另一台电脑的 GPT 实施，五项尚未改入代码。** 具体的“做什么、为什么、怎么做”、Windows x64 / Mac ARM64 / Mac Intel 的适配与验收见 [第二轮跨电脑交接计划](desktop-package-size-next-phase.md)。现有已完成状态与下面历史记录保持不变。
+用户已确认继续考虑五项优化：Windows 排除 Mac 开发二进制、排除 LazyLLM 文档、解释器别名去重、相同 Python 依赖共享、PDF 字体后置。**执行端已实现五项代码及 Intel 原生构建入口，ARM64 已构建；Windows/Intel 原生验收仍待完成。** 具体的“做什么、为什么、怎么做”、Windows x64 / Mac ARM64 / Mac Intel 的适配与验收见 [第二轮跨电脑交接计划](desktop-package-size-next-phase.md)。现有已完成状态与下面历史记录保持不变。
 
 ## 本轮修改范围
 

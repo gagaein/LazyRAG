@@ -199,6 +199,7 @@ func coreServiceEnv(cfg RuntimeConfig, paths RuntimePaths) []string {
 		"LAZYMIND_STATE_BACKEND=sqlite",
 		"LAZYMIND_STATE_SQLITE_DIR=" + paths.CoreStateDir,
 		"LAZYMIND_RUNTIME_ROOT=" + paths.RuntimeRoot,
+		"LAZYMIND_PDF_FONT_CATALOG=" + filepath.Join(paths.ResourcesRoot, "config", "pdf-font.json"),
 		"LAZYMIND_UPLOAD_ROOT=" + paths.UploadRoot,
 		"LAZYMIND_SHARED_UPLOAD_DIR=" + paths.UploadRoot,
 		"LAZYMIND_HISTORY_INJECTION_ENABLED=" + envText("LAZYMIND_HISTORY_INJECTION_ENABLED", "true"),

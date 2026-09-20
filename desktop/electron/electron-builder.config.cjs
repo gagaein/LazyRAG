@@ -182,19 +182,30 @@ async function adhocSignAppBundle(appPath) {
 }
 
 async function splitPythonComponents(runtimeRoot) {
-  if (process.env.LAZYMIND_DESKTOP_DEFER_PYTHON === "false") return;
   // Running Python inside the unfinished app can trigger Gatekeeper before the
   // outer bundle is signed. Relative runtime symlinks remain valid after moving.
   const appOutDir = path.resolve(runtimeRoot, "../../../..");
   const { stagedRuntime } = stageEmbeddedRuntime(appOutDir);
   try {
-    const { stdout } = await execFile(
-      path.join(stagedRuntime, "deps/python/algorithm/bin/python"),
-      [path.resolve(__dirname, "../scripts/build-python-components.py"), stagedRuntime,
-        "--output", path.resolve(__dirname, "../dist/python-components/darwin-arm64")],
-      { maxBuffer: 4 * 1024 * 1024 },
-    );
-    console.log(stdout);
+    const python = path.join(stagedRuntime, "deps/python/algorithm/bin/python");
+    const { stdout: machine } = await execFile(python, ["-I", "-B", "-c", "import platform; print(platform.machine())"]);
+    const componentArch = { arm64: "arm64", x86_64: "amd64" }[machine.trim()];
+    if (!componentArch || componentArch !== ({ x64: "amd64", arm64: "arm64" })[process.arch]) {
+      throw new Error(`Bundled Python architecture does not match native build: ${machine.trim()}`);
+    }
+    if (process.env.LAZYMIND_DESKTOP_DEFER_PYTHON !== "false") {
+      const { stdout } = await execFile(
+        path.join(stagedRuntime, "deps/python/algorithm/bin/python"),
+        [path.resolve(__dirname, "../scripts/build-python-components.py"), stagedRuntime,
+          "--output", path.resolve(__dirname, `../dist/python-components/darwin-${componentArch}`)],
+        { maxBuffer: 4 * 1024 * 1024 },
+      );
+      console.log(stdout);
+    }
+    const args = [path.resolve(__dirname, "../scripts/share-python-dependencies.py"), stagedRuntime];
+    if (process.env.LAZYMIND_DESKTOP_SHARE_PYTHON === "true") args.push("--apply");
+    const { stdout: sharing } = await execFile(python, args, { maxBuffer: 4 * 1024 * 1024 });
+    console.log(sharing);
   } finally {
     restoreEmbeddedRuntime(appOutDir);
   }
@@ -205,6 +216,12 @@ async function signAndStageEmbeddedRuntime(context) {
     return;
   }
 
+  // electron-builder 24 uses builder-util Arch: x64=1, arm64=3.
+  const targetMachine = { 1: "x86_64", 3: "arm64" }[context.arch];
+  const nativeMachine = { x64: "x86_64", arm64: "arm64" }[process.arch];
+  if (!targetMachine || targetMachine !== nativeMachine) {
+    throw new Error("Mac runtime packaging requires a native host matching the Electron target");
+  }
   const appPath = path.join(context.appOutDir, "LazyMind.app");
   const runtimeRoot = path.join(appPath, "Contents", "Resources", "runtime");
 

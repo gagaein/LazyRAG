@@ -66,6 +66,7 @@ function writeOfflineSkillFixtures(root) {
 
 for (const target of [
   { platform: "darwin", arch: "arm64", suffix: "" },
+  { platform: "darwin", arch: "amd64", suffix: "" },
   { platform: "windows", arch: "amd64", suffix: ".exe" },
 ]) {
   test(`writes ${target.platform}/${target.arch} desktop runtime manifest`, () => {

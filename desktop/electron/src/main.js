@@ -96,7 +96,7 @@ const externalRuntimeURL = desktopDevURL
   )
   : "";
 const isExternalRuntimeDev = Boolean(desktopDevURL && externalRuntimeURL);
-const desktopTarget = isWindows ? "windows-x64" : "darwin-arm64";
+const desktopTarget = isWindows ? "windows-x64" : (process.arch === "x64" ? "darwin-x64" : "darwin-arm64");
 const ownerToken = randomUUID();
 const localWorkspaceCandidates = new Map();
 const internalServiceToken = randomBytes(32).toString("base64url");

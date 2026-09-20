@@ -1,9 +1,10 @@
 import { jsPDF } from "jspdf";
+import { getCjkFont } from "./pdfFont";
 import { pdfjs } from "react-pdf";
 import type { PDFPageProxy } from "pdfjs-dist";
 import { isRasterLayoutBlock, validatePdfLayoutBlocks, type PdfLayoutBlock } from "../api/pdfArtifacts";
 
-export interface PdfRenderProgress { page: number; pages: number; progress: number }
+export interface PdfRenderProgress { page: number; pages: number; progress: number; stage?: "font" | "render" }
 
 type NativeTextRun = { text: string; x0: number; y0: number; x1: number; y1: number; height: number };
 
@@ -78,25 +79,6 @@ async function renderPage(page: PDFPageProxy, scale = 2) {
 
 function createPdf(widthPt: number, heightPt: number): jsPDF {
   return new jsPDF({ orientation: widthPt > heightPt ? "landscape" : "portrait", unit: "pt", format: [widthPt, heightPt], compress: true });
-}
-
-let cjkFontPromise: Promise<string> | undefined;
-
-async function getCjkFont(): Promise<string> {
-  cjkFontPromise ||= fetch("/fonts/NotoSansSC-wght.ttf")
-    .then((response) => {
-      if (!response.ok) throw new Error("无法加载 PDF 中文字体");
-      return response.arrayBuffer();
-    })
-    .then((buffer) => {
-      const bytes = new Uint8Array(buffer);
-      let binary = "";
-      for (let start = 0; start < bytes.length; start += 0x8000) {
-        binary += String.fromCharCode(...bytes.subarray(start, start + 0x8000));
-      }
-      return binary;
-    });
-  return cjkFontPromise;
 }
 
 function installCjkFont(pdf: jsPDF, fontData: string) {
@@ -180,9 +162,10 @@ function wrapCanvasText(context: CanvasRenderingContext2D, text: string, maxWidt
 export async function buildSearchablePdf(source: ArrayBuffer, layoutBlocks: PdfLayoutBlock[], onProgress?: (value: PdfRenderProgress) => void): Promise<Blob> {
   const document = await pdfjs.getDocument({ data: copyBuffer(source) }).promise;
   validatePdfLayoutBlocks(layoutBlocks, document.numPages);
-  const cjkFont = await getCjkFont();
   let output: jsPDF | undefined;
   try {
+    onProgress?.({ page: 0, pages: document.numPages, progress: 0, stage: "font" });
+    const cjkFont = await getCjkFont();
     for (let pageNo = 1; pageNo <= document.numPages; pageNo++) {
       const page = await document.getPage(pageNo);
       const viewport = page.getViewport({ scale: 1 });

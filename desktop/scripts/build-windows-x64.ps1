@@ -248,20 +248,12 @@ function Prune-PythonTree([string]$Root) {
 }
 
 function Materialize-PythonAliases {
-    $pythonRoot = Join-Path $runtimeRoot 'runtimes\python'
-    $links = @(Get-ChildItem -LiteralPath $pythonRoot -Force -ErrorAction SilentlyContinue | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint })
-    foreach ($link in $links) {
-        $target = [string]($link.Target | Select-Object -First 1)
-        if (-not [IO.Path]::IsPathRooted($target)) {
-            $target = Join-Path (Split-Path $link.FullName) $target
-        }
-        $target = [IO.Path]::GetFullPath($target)
-        $copy = $link.FullName + '.materialized'
-        Remove-GeneratedPath $copy
-        Copy-Item -LiteralPath $target -Destination $copy -Recurse -Force
-        [IO.Directory]::Delete($link.FullName)
-        Move-Item -LiteralPath $copy -Destination $link.FullName
-    }
+    $interpreters = @(Get-ChildItem -LiteralPath (Join-Path $runtimeRoot 'runtimes\python') -Directory |
+        Where-Object { -not ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -and (Test-Path (Join-Path $_.FullName 'python.exe')) })
+    if ($interpreters.Count -ne 1) { throw 'Expected one real bundled Python interpreter before alias normalization.' }
+    Invoke-Native (Join-Path $interpreters[0].FullName 'python.exe') @(
+        '-B', (Join-Path $repoRoot 'desktop\scripts\normalize-windows-python.py'), $runtimeRoot
+    )
 }
 
 function Copy-RuntimeApp {
@@ -276,6 +268,7 @@ function Copy-RuntimeApp {
         (Join-Path $repoRoot '.git'),
         (Join-Path $repoRoot '.github'),
         (Join-Path $repoRoot 'docs'),
+        (Join-Path $repoRoot 'algorithm\lazyllm\docs'),
         (Join-Path $repoRoot 'tests'),
         (Join-Path $repoRoot 'local\build'),
         (Join-Path $repoRoot 'local\runtime'),
@@ -304,8 +297,9 @@ function Copy-RuntimeApp {
     foreach ($relativePath in @('skills\research', 'skills\review', 'skills\search')) {
         Remove-GeneratedPath (Join-Path $appRoot $relativePath)
     }
-    $coreDevBinary = Join-Path $appRoot 'backend\core\core.exe'
-    if (Test-Path -LiteralPath $coreDevBinary) { Remove-Item -LiteralPath $coreDevBinary -Force }
+    foreach ($relativePath in @('backend\core\core', 'backend\core\core.exe', 'algorithm\lazyllm\docs')) {
+        Remove-GeneratedPath (Join-Path $appRoot $relativePath)
+    }
     if (-not (Test-Path -LiteralPath (Join-Path $appRoot 'frontend\dist\index.html') -PathType Leaf)) {
         throw 'Desktop frontend dist is missing from staged runtime app.'
     }
@@ -382,8 +376,13 @@ function Finalize-Desktop([ValidateSet('zip', 'installer')][string]$PackageKind 
     Prune-PythonTree (Join-Path $runtimeRoot 'runtimes\python')
     Prune-PythonTree (Join-Path $runtimeRoot 'deps\python')
 
+    $shareArgs = @('-B', (Join-Path $repoRoot 'desktop\scripts\share-python-dependencies.py'), $runtimeRoot)
+    if ($env:LAZYMIND_DESKTOP_SHARE_PYTHON -eq 'true') { $shareArgs += '--apply' }
+    Invoke-Native (Join-Path $runtimeRoot 'deps\python\algorithm\Scripts\python.exe') $shareArgs
+
     Write-Host '==> Staging runtime application files'
     Copy-RuntimeApp
+    Invoke-Native 'node.exe' @((Join-Path $repoRoot 'desktop\scripts\stage-pdf-font.mjs'), $runtimeRoot)
     Write-Host '==> Materializing offline Skill packages and featured catalog'
     Materialize-OfflineSkills
     Write-Host '==> Preparing workflow example metadata (download during warmup by default)'
@@ -418,6 +417,7 @@ function Finalize-Desktop([ValidateSet('zip', 'installer')][string]$PackageKind 
         throw "Desktop runtime contains non-portable reparse points; first path: $($reparse[0].FullName)"
     }
 
+    Invoke-Native 'node.exe' @((Join-Path $repoRoot 'desktop\scripts\report-runtime-size.mjs'), $runtimeRoot, (Join-Path $targetRoot 'final-runtime-size.json'))
     Write-Host '==> Packaging Electron Windows x64 application'
     New-Item -ItemType Directory -Force -Path $env:ELECTRON_CACHE | Out-Null
     New-Item -ItemType Directory -Force -Path $env:ELECTRON_BUILDER_CACHE | Out-Null
@@ -457,6 +457,7 @@ function Finalize-Desktop([ValidateSet('zip', 'installer')][string]$PackageKind 
             throw "Electron Builder did not produce $builderInstaller"
         }
         Move-Item -LiteralPath $builderInstaller -Destination $finalInstaller -Force
+        Invoke-Native 'node.exe' @((Join-Path $repoRoot 'desktop\scripts\report-runtime-size.mjs'), $runtimeRoot, (Join-Path $targetRoot 'final-runtime-size.json'), $finalInstaller)
         Write-Host "Windows installer: $finalInstaller"
         return
     }
@@ -471,6 +472,7 @@ function Finalize-Desktop([ValidateSet('zip', 'installer')][string]$PackageKind 
     }
     Move-Item -LiteralPath $builderZip -Destination $finalZip -Force
     Write-Host "Unpacked app: $(Join-Path $distRoot 'win-unpacked')"
+    Invoke-Native 'node.exe' @((Join-Path $repoRoot 'desktop\scripts\report-runtime-size.mjs'), $runtimeRoot, (Join-Path $targetRoot 'final-runtime-size.json'), $finalZip)
     Write-Host "Portable ZIP: $finalZip"
 }
 

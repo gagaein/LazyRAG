@@ -579,6 +579,16 @@ desktop-darwin-arm64-dmg:
 		LAZYMIND_DESKTOP_SIGNING_MODE=developer-id \
 		bash desktop/scripts/build-darwin-arm64.sh
 
+.PHONY: desktop-darwin-x64 desktop-darwin-x64-dmg desktop-darwin-x64-clean
+desktop-darwin-x64:
+	@bash desktop/scripts/build-darwin-x64.sh
+
+desktop-darwin-x64-dmg:
+	@LAZYMIND_DESKTOP_PACKAGE_KIND=dmg LAZYMIND_DESKTOP_SIGNING_MODE=developer-id bash desktop/scripts/build-darwin-x64.sh
+
+desktop-darwin-x64-clean:
+	@rm -rf "$(CURDIR)/desktop/build/darwin-x64" "$(CURDIR)/desktop/dist/mac" "$(CURDIR)/desktop/dist/LazyMind-darwin-x64.zip" "$(CURDIR)/desktop/dist/LazyMind-macos-x64.dmg"
+
 desktop-darwin-arm64-clean:
 	@echo "🧹 Removing Darwin arm64 Desktop generated outputs..."
 	@for path in \

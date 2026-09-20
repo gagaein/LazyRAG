@@ -266,6 +266,7 @@ func registerAllRoutes(r *mux.Router) {
 	handleAPI(r, "POST", "/datasets/{dataset}:unsetDefault", []string{"document.write"}, doc.UnsetDefault)
 	handleAPI(r, "GET", "/data-sources/local-fs-chat-setting", []string{"document.read"}, datasource.GetLocalFSChatSetting)
 	handleAPI(r, "PUT", "/data-sources/local-fs-chat-setting", []string{"document.write"}, datasource.SetLocalFSChatSetting)
+	handleAPI(r, "GET", "/system-dependencies/pdf-font", []string{"document.read"}, systemdeps.GetPDFFont)
 	handleAPI(r, "GET", "/system-dependencies/python", []string{"document.read"}, systemdeps.GetPythonComponents)
 	handleAPI(r, "POST", "/system-dependencies/python:install", []string{"document.write"}, systemdeps.InstallPythonComponent)
 	handleAPI(r, "GET", "/system-dependencies/ffmpeg", []string{"document.read"}, systemdeps.GetFFmpegDependency)

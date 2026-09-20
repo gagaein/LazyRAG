@@ -1,8 +1,31 @@
 # 安装包第二轮瘦身：跨电脑实施交接计划
 
-日期：2026-09-20。基线：`cst/installer_opt` 的 `e0d027638`。**本文只说明应该做什么、为什么做、具体怎么做；下列五项尚未实施。** 用户要求由另一台电脑的 GPT 实施，本机本轮尝试的代码修改已撤回，不包含新的运行时代码或可上传资源。
+日期：2026-09-20。原交接基线：`cst/installer_opt` 的 `e0d027638`；执行端从 `1b3e4a03` 继续实施。**五项优化及 Intel 原生构建入口已加入代码；Mac ARM64 已实际构建，Windows/Intel 原生验收仍待完成。** 下方保留原设计和验收要求，当前结果以本节实施记录为准。
 
 开始前先在目标电脑获取 `origin/cst/installer_opt` 最新提交并核对工作区；不要覆盖同事未提交的改动。当前已完成内容、历史体积和既有测试见 [第一轮开发记录](desktop-package-size-reduction.md)，现有 Mac ARM64 操作步骤见 [安装文档](../../desktop/INSTALL.zh-CN.md)。不要把本文的计划路径或建议命令当作已经存在的功能。
+
+## 本轮实施记录
+
+| 项目 | 已实施 | 验证边界 |
+| --- | --- | --- |
+| Windows 开发二进制、LazyLLM docs 排除 | 精确删除 staging 中的 `backend/core/core`、`core.exe` 和嵌套 docs；保留源码 | 本机没有 Windows，最终 EXE 内容与业务启动待验证 |
+| Windows 解释器别名 | `normalize-windows-python.py` 校验目标在捆绑解释器目录内，规范化三个 venv、复制可搬迁启动器、实际启动成功后删除 junction；Go 搬迁同步相关配置字段 | 已增加原生测试并交叉编译 Windows runtime-manager 测试二进制；原生搬迁/安装未运行 |
+| Python 共享 | `share-python-dependencies.py` 比较真实文件和元数据、排除不确定包、每包独立目录和各环境相对 `.pth`、导入/metadata 复查、重复执行及损坏检查 | 默认关闭，开关 `LAZYMIND_DESKTOP_SHARE_PYTHON=true` / Actions `share_python=true`；本次 ARM64 开启并通过 |
+| PDF 字体 | 固定 catalog、构建生成 TTF 和许可证；桌面 staging 移出字体；Core 已鉴权接口下载、SHA/大小验证、超时、并发去重、原子缓存及坏缓存重试；前端错误可重试 | 真实 TTF 经本地 HTTPS/处理器验证；生成 PDF 可提取中文。云端未上传、完整界面回归待完成 |
+| Mac Intel | `make desktop-darwin-x64`、`desktop-darwin-x64-dmg`，原生架构检查、amd64 manifest/组件目录、x64 Electron、开发路径和清理入口 | 官方飞书 CLI 下载 SHA 和 x86_64 Mach-O 已核对；完整 Intel 应用没有在本机运行 |
+
+Mac 完整构建：Node 20.20.2、pnpm 10.34.5、Python 3.11.15，ad-hoc ZIP，原三个优化开关开启，额外开启共享。最后拆出的 RAG 与第一轮文件和 SHA 完全一致：`lazymind-python-rag-darwin-arm64-cp311-53a1c2e770966b71.zip` / `f90b5c00b43943b031d698fc939c81b24d77a738e357bb541fe74d7e768fb8d1`，本次无需重传该组件。
+
+- 本机第一轮 ZIP：670,748,589 字节 / 639.68 MiB。
+- 第二轮 ZIP：652,231,633 字节 / 622.02 MiB；比上述本机产物减少 17.66 MiB（2.76%）。这是本机前后构建结果，包含代码/资源变更，不作为严格锁定全部输入的 A/B 结论，也不能推算 Windows EXE 节省。
+- 最终 runtime：1254.61 MiB 展开；相同纯 Python 依赖共享减少 8,648,034 字节 / 8.25 MiB 展开；字体移出 17,772,300 字节 / 16.95 MiB。两者不能直接从压缩包中相减。
+- 报告：`desktop/build/darwin-arm64/final-runtime-size.json`；共享报告在最终 `.app/Contents/Resources/runtime/config/python-sharing.json`。旧已导入环境的共享试验仅节省 5.26 MiB，因为有额外缓存，保守规则跳过更多包；正式记录使用干净构建结果。
+- 最终 `.app` 使用已上传 RAG 的真实云端下载完成六阶段验证，随后 `codesign --verify --deep --strict` 通过；报告为 `desktop/dist/component-check/darwin-arm64/second-round-cloud-report.json`。
+- 独立共享环境搬迁到中文/空格新路径后，基础导入、RAG、Milvus 写入/flush/重启检索/删除全部通过。该目录已改变，原试验路径不再可用。
+
+测试：Desktop 150 通过 / 3 Windows 专属跳过；Python 裁剪/组件/共享 24 通过 / 2 Windows 专属跳过；Windows alias 原生新增测试在 Mac 跳过；Core systemdeps、runtime-manager 全量通过；字体接口 race 测试通过；前端字体加载/重试/Web 回退 2 项通过，前端生产构建通过。没有调用真实模型 API，也没有宣称安装、登录、飞书、Skill、PDF 翻译等全量业务验收完成。Windows 既有 Milvus `WinError 183` 未修复，不能标记 Windows RAG 持久化通过。
+
+新上传资源只有跨平台字体：`desktop/dist/pdf-font/lazymind-pdf-NotoSansSC-a3041811a78c361b.ttf`，SHA-256 `a3041811a78c361b1de50f953c805e0244951c21c5bd412f7232ef0d899af0da`。目标是既有 ModelScope 数据集 master 根目录；目前尚未上传。操作及确切 URL 见 [安装文档第 11 节](../../desktop/INSTALL.zh-CN.md#11-第二轮资源共享开关与-windows-操作)。不提交构建产物或 LazyLLM gitlink。
 
 ## 约束与交付平台
 
@@ -15,7 +38,7 @@
 | --- | --- | --- | --- |
 | Windows x64，唯一 Windows 版本 | Electron `x64`，Go/catalog `amd64` | `desktop/scripts/build-windows-x64.ps1` | 继续生成 x64 installer；不增加 Windows ARM64 |
 | Mac Apple Silicon，M 系列 | `arm64` | `make desktop-darwin-arm64` / `desktop-darwin-arm64-dmg` | 保留原生 ARM64 构建、组件签名、包外拆包及最终签名顺序 |
-| Mac Intel | 系统/Python `x86_64`，Electron `x64`，Go/catalog `amd64` | **目前没有完整入口** | 另补原生 Intel 构建入口及校验；不能把 ARM64 产物改名，不能只改 Electron 参数 |
+| Mac Intel | 系统/Python `x86_64`，Electron `x64`，Go/catalog `amd64` | `make desktop-darwin-x64` / `desktop-darwin-x64-dmg` | 原生 Intel 构建待验收，已补入口及校验；不能把 ARM64 产物改名，不能只改 Electron 参数 |
 
 两个 Mac 架构是两个独立构建，不是已经提供 Universal 包。先在相应原生机器构建验证；CPU 架构与最低 macOS 版本分别核实，不能根据 Electron 支持范围推断 Python wheels 的兼容范围。本次不发布 Linux。
 
@@ -105,7 +128,7 @@ Python 原报告在 RAG 拆出、解释器别名处理和最终封装之前生�
 
 ## Mac Intel 构建适配清单
 
-这是为了满足两个 Mac 架构的交付要求，尚未实现；实施 GPT 需要把当前 ARM64 专用路径参数化或增加共用实现与两个薄入口。
+以下为原设计检查清单，现已按上述实施记录补齐代码入口，共用现有 Mac 构建脚本并添加 x64 薄入口；原生 Intel 构建和业务回归仍待验收。
 
 | 位置 | 应做修改与检查 |
 | --- | --- |
@@ -118,11 +141,11 @@ Python 原报告在 RAG 拆出、解释器别名处理和最终封装之前生�
 | `desktop/electron/src/main.js` | 本地开发 runtime 默认路径目前固定 `darwin-arm64`，随运行架构选择；检查相关 dev-runner/clean 脚本是否同样硬编码 |
 | CI 与文档 | 如增加 Intel CI，明确选择可用原生 runner；artifact 名区分架构。未跑 Intel 构建时只能写“入口已实现，真机待验证” |
 
-2026-09-20 已只读核对 [飞书 CLI v1.0.93 官方发布](https://github.com/larksuite/cli/releases/tag/v1.0.93) 及其 [checksums.txt](https://github.com/larksuite/cli/releases/download/v1.0.93/checksums.txt)：存在 `lark-cli-1.0.93-darwin-amd64.tar.gz`，官方列出的 SHA-256 为 `bf37861ce5b5fb10c093ffd8b7305f2a80349280cf32563267c29f81cb864e53`。本机未下载运行 Intel CLI；实施时仍须下载校验并检查 Mach-O 架构。本计划未修改版本清单。
+2026-09-20 已只读核对 [飞书 CLI v1.0.93 官方发布](https://github.com/larksuite/cli/releases/tag/v1.0.93) 及其 [checksums.txt](https://github.com/larksuite/cli/releases/download/v1.0.93/checksums.txt)：存在 `lark-cli-1.0.93-darwin-amd64.tar.gz`，官方列出的 SHA-256 为 `bf37861ce5b5fb10c093ffd8b7305f2a80349280cf32563267c29f81cb864e53`。执行端现已下载并核对上述 SHA 与 x86_64 Mach-O 架构，已更新版本清单；未在 Intel 机器运行完整应用。
 
 最终三个 RAG 目录分别为 Windows `windows-amd64`、Mac ARM64 `darwin-arm64`、Mac Intel `darwin-amd64`，每份均绑定同次构建 installer 的 catalog，不能互换。字体与 Workflow 五案例属于跨平台资源，和这些原生组件区分。
 
-## 实施顺序、检查与交付
+## 原实施顺序与后续验收清单
 
 1. 拉取最新分支并确认协作改动，先做第 1、2 项；构建 staging 检查排除范围，不更改 Skill 或子模块。
 2. 做第 3 项，在 Windows 原生环境验证搬迁与三个 venv 启动，再处理第 4 项共享；两项分开记录报告，便于定位问题。
