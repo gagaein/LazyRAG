@@ -27,6 +27,16 @@ Mac 完整构建：Node 20.20.2、pnpm 10.34.5、Python 3.11.15，ad-hoc ZIP，�
 
 新上传资源只有跨平台字体：`desktop/dist/pdf-font/lazymind-pdf-NotoSansSC-a3041811a78c361b.ttf`，SHA-256 `a3041811a78c361b1de50f953c805e0244951c21c5bd412f7232ef0d899af0da`。目标是既有 ModelScope 数据集 master 根目录；目前尚未上传。操作及确切 URL 见 [安装文档第 11 节](../../desktop/INSTALL.zh-CN.md#11-第二轮资源共享开关与-windows-操作)。不提交构建产物或 LazyLLM gitlink。
 
+## Windows 接手端原生补测（2026-09-20）
+
+从另一台电脑拉取 `446a49c02` 后，在 WSL 宿主的真实 Windows CPython 3.11.15 x64 上补测，未重新实现已有去重/共享功能。
+
+- 解释器 alias/junction 规范化原生测试 1 项通过，覆盖中文/空格路径、三个 venv 启动、保留真实解释器及重复执行。
+- 共享依赖原生测试 7 项通过，覆盖共享后实际导入、metadata/资源读取、移动目录后启动、版本/内容隔离、损坏检测与重复执行；同组 Linux 测试 7 项也通过。
+- runtime-manager Windows 测试二进制原生执行 3 项通过：venv 路径搬迁及附加配置字段、不变只读文件、被锁文件替换报错。
+- 初次共享测试有 2 项因 UTF-8 中文资源被隔离子进程按 GBK 读取而失败。已显式指定测试资源和子进程编码；同时将生产规范化脚本的 `pyvenv.cfg` 读写固定为 UTF-8，避免中文构建路径按系统默认编码写坏。以上最终 Python 原生测试使用 `-X utf8=0` 运行，确保配置处理不依赖构建机开启 UTF-8 模式。
+- **边界：** 这些是原生脚本/模块测试，不代表本次已构建完整 Windows EXE，也不代表三个真实业务环境及安装后全部流程已验收。Windows installer 首次 warmup、真实服务、升级与 RAG 持久化仍需原验收清单。依赖共享开关仍默认关闭；Actions 勾选 `share_python` 才会应用共享，解释器别名去重则默认执行。
+
 ## 约束与交付平台
 
 - 不修改 Skill 代码、资源、安装流程，不后置 Skill Review 依赖的 UMAP/Numba/llvmlite 及其科学计算依赖。

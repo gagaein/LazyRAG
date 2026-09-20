@@ -31,12 +31,12 @@ class SharingTest(unittest.TestCase):
         record = f'{name}-{version}.dist-info/RECORD'
         files[record] = ''.join(f'{f},,\n' for f in [*files, record])
         for name, value in files.items():
-            p = site / name; p.parent.mkdir(parents=True, exist_ok=True); p.write_text(value)
+            p = site / name; p.parent.mkdir(parents=True, exist_ok=True); p.write_text(value, encoding='utf-8')
 
     def probe(self, runtime, env, expected):
         exe = runtime / 'deps/python' / env / ('Scripts/python.exe' if sys.platform == 'win32' else 'bin/python')
-        code = "import sample,importlib.metadata as m,importlib.resources as r; print(sample.VALUE,m.version('sample'),r.files('sample').joinpath('data.txt').read_text())"
-        result = subprocess.check_output([str(exe), '-I', '-B', '-c', code], text=True)
+        code = "import sample,importlib.metadata as m,importlib.resources as r; print(sample.VALUE,m.version('sample'),r.files('sample').joinpath('data.txt').read_text(encoding='utf-8'))"
+        result = subprocess.check_output([str(exe), '-I', '-B', '-X', 'utf8', '-c', code], text=True, encoding='utf-8')
         self.assertIn(expected, result)
 
     def test_share_relocate_resources_metadata_and_resume(self):

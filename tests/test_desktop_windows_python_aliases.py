@@ -23,6 +23,9 @@ class AliasTest(unittest.TestCase):
             for name in ('algorithm','auth-service','channel-gateway'):
                 subprocess.run([str(alias/'python.exe'),'-m','venv','--without-pip',str(runtime/'deps/python'/name)],check=True)
             aliases.normalize(runtime)
+            for name in ('algorithm', 'auth-service', 'channel-gateway'):
+                config = runtime / 'deps/python' / name / 'pyvenv.cfg'
+                self.assertIn(str(real.resolve()), config.read_text(encoding='utf-8'))
             self.assertFalse(alias.exists())
             self.assertTrue((real/'python.exe').exists())
             aliases.normalize(runtime)

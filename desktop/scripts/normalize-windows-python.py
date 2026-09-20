@@ -30,7 +30,7 @@ def normalize(runtime):
     for name in ('algorithm', 'auth-service', 'channel-gateway'):
         venv = runtime / 'deps/python' / name
         cfg = venv / 'pyvenv.cfg'
-        lines = cfg.read_text().splitlines()
+        lines = cfg.read_text(encoding='utf-8').splitlines()
         fields = dict(line.split('=', 1) for line in lines if '=' in line)
         fields = {k.strip(): v.strip() for k, v in fields.items()}
         home = Path(fields['home']).resolve(strict=True)
@@ -44,7 +44,7 @@ def normalize(runtime):
             key = line.partition('=')[0].strip()
             rewritten.append(f'{key} = {replacements[key]}' if key in replacements else line)
         tmp = cfg.with_suffix('.tmp')
-        tmp.write_text('\n'.join(rewritten) + '\n')
+        tmp.write_text('\n'.join(rewritten) + '\n', encoding='utf-8')
         os.replace(tmp, cfg)
         # Use the same relocatable executable/DLL layout as runtime-manager.
         for source in home.iterdir():
