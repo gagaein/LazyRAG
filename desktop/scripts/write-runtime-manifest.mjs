@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
+import { validateConfig } from "./stage-history-injection-package.mjs";
 
 const args = process.argv.slice(2);
 const runtimeRoot = args.shift();
@@ -105,7 +106,17 @@ if (!existsSync(featuredSkillAssets)) {
   process.exit(1);
 }
 const historyInjectionArchive = path.join(runtimeRoot, "history-injection.zip");
-if (!existsSync(historyInjectionArchive)) {
+const historyInjectionDescriptor = path.join(runtimeRoot, "history-injection-package.json");
+let historyInjectionDownload;
+if (existsSync(historyInjectionDescriptor)) {
+  if (existsSync(historyInjectionArchive)) {
+    throw new Error("history examples cannot be bundled and deferred in the same runtime");
+  }
+  const config = JSON.parse(readFileSync(historyInjectionDescriptor, "utf8"));
+  validateConfig(config, historyInjectionDescriptor);
+  historyInjectionDownload = { url: config.url, size: config.size, sha256: config.sha256 };
+}
+if (!historyInjectionDownload && !existsSync(historyInjectionArchive)) {
   console.error(`history injection package is missing: ${historyInjectionArchive}`);
   process.exit(1);
 }
@@ -168,7 +179,7 @@ const manifest = {
     channelGatewayVenv: "deps/python/channel-gateway",
     algorithmVenv: "deps/python/algorithm",
     localProxyConfig: "app/local/local-proxy/configs/cloud-replace-kong.yaml",
-    historyInjectionArchive: "history-injection.zip"
+    ...(historyInjectionDownload ? {} : { historyInjectionArchive: "history-injection.zip" })
   },
   services: {
     "local-proxy": { healthPath: "/_local/healthz" },
@@ -182,11 +193,14 @@ const manifest = {
     "lazyllm-algo": { healthPath: "/docs" },
     "chat": { healthPath: "/health" }
   },
+  ...(historyInjectionDownload ? { historyInjectionDownload } : {}),
   checksums: {
     ...walk(path.join(runtimeRoot, "bin"), runtimeRoot),
     ...walk(path.join(runtimeRoot, "builtin-skills"), runtimeRoot),
     ...walk(path.join(runtimeRoot, "featured-skills"), runtimeRoot),
-    "history-injection.zip": sha256(historyInjectionArchive)
+    ...(historyInjectionDownload
+      ? { "history-injection-package.json": sha256(historyInjectionDescriptor) }
+      : { "history-injection.zip": sha256(historyInjectionArchive) })
   }
 };
 

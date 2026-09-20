@@ -6,6 +6,12 @@ directory on ``PYTHONPATH``, including for subprocesses launched by LazyLLM.
 """
 
 import os
+import site
+
+
+for _component_path in os.environ.get('LAZYMIND_PYTHON_COMPONENT_PATHS', '').split(os.pathsep):
+    if _component_path:
+        site.addsitedir(_component_path)
 
 
 def _uses_sqlite_proxy() -> bool:

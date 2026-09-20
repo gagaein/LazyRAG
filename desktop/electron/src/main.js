@@ -488,7 +488,15 @@ function captureSidecarChunk(source, chunk) {
         updateStartupState({
           status: "starting",
           phase: "Preparing sample conversations",
-          message: "Verifying and unpacking the bundled sample conversations...",
+          message: "Downloading if needed, verifying and unpacking sample conversations...",
+          progress: null,
+        });
+      }
+      if (event?.phase === "history-injection-payload" && event?.event === "phase.skipped") {
+        updateStartupState({
+          status: "starting",
+          phase: "Starting local services",
+          message: "Sample conversations are unavailable. They will be retried on the next launch.",
           progress: null,
         });
       }
@@ -772,7 +780,7 @@ async function runInstallerWarmup() {
     fs.mkdirSync(desktopLogsDir, { recursive: true });
     fs.appendFileSync(warmupLogPath, `[${new Date().toISOString()}] ${message}\n`);
   };
-  log(`starting offline installer warmup with timeout ${timeoutSeconds}s`);
+  log(`starting installer warmup with timeout ${timeoutSeconds}s`);
   await runInstallerWarmupLifecycle({
     startRuntime: () => runSidecar("up", maintenanceArgs, {
       timeout: timeoutSeconds * 1000,

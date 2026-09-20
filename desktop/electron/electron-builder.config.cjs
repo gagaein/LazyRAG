@@ -181,8 +181,19 @@ async function adhocSignAppBundle(appPath) {
   await codesignWithRetry(["--force", "--sign", "-", "--timestamp=none", appPath], appPath);
 }
 
+async function splitPythonComponents(runtimeRoot) {
+  if (process.env.LAZYMIND_DESKTOP_DEFER_PYTHON === "false") return;
+  const { stdout } = await execFile(
+    path.join(runtimeRoot, "deps/python/algorithm/bin/python"),
+    [path.resolve(__dirname, "../scripts/build-python-components.py"), runtimeRoot,
+      "--output", path.resolve(__dirname, "../dist/python-components/darwin-arm64")],
+    { maxBuffer: 4 * 1024 * 1024 },
+  );
+  console.log(stdout);
+}
+
 async function signAndStageEmbeddedRuntime(context) {
-  if (context.electronPlatformName !== "darwin" || macSigningMode === "none") {
+  if (context.electronPlatformName !== "darwin") {
     return;
   }
 
@@ -217,9 +228,13 @@ async function signAndStageEmbeddedRuntime(context) {
       }
     });
     await Promise.all(workers);
+    await splitPythonComponents(runtimeRoot);
     stageEmbeddedRuntime(context.appOutDir);
     return;
   }
+
+  await splitPythonComponents(runtimeRoot);
+  if (macSigningMode === "none") return;
 
   // electron-builder 24 treats identity "-" as a keychain name lookup and skips
   // signing when no matching identity exists. Perform ad-hoc signing ourselves

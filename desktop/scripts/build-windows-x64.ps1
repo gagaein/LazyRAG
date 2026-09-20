@@ -386,7 +386,7 @@ function Finalize-Desktop([ValidateSet('zip', 'installer')][string]$PackageKind 
     Copy-RuntimeApp
     Write-Host '==> Materializing offline Skill packages and featured catalog'
     Materialize-OfflineSkills
-    Write-Host '==> Downloading verified history injection package'
+    Write-Host '==> Preparing workflow example metadata (download during warmup by default)'
     Invoke-Native 'node.exe' @(
         (Join-Path $repoRoot 'desktop\scripts\stage-history-injection-package.mjs'),
         $runtimeRoot
@@ -528,6 +528,21 @@ function Build-Desktop([ValidateSet('zip', 'installer')][string]$PackageKind = '
     Invoke-NativeWithRetry 'LazyLLM RAG dependencies' (Join-Path $algorithmVenv 'Scripts\lazyllm.exe') @('install', 'rag')
     Invoke-NativeWithRetry 'Algorithm Python dependencies' 'uv.exe' @('pip', 'install', '--python', $algorithmPython, '--link-mode', 'copy', '--strict', '-r', (Join-Path $repoRoot 'algorithm\requirements.txt'))
     Invoke-NativeWithRetry 'Algorithm local Python dependencies' 'uv.exe' @('pip', 'install', '--python', $algorithmPython, '--link-mode', 'copy', '--strict', '-r', (Join-Path $repoRoot 'algorithm\requirements-local.txt'))
+    Write-Host '==> Auditing and pruning bundled Python runtime'
+    $pythonPruneArgs = @(
+        (Join-Path $repoRoot 'desktop\scripts\prune-python-runtime.py'),
+        $runtimeRoot,
+        '--report', (Join-Path $targetRoot 'python-size-report.json'),
+        '--verify-ark'
+    )
+    if ($env:LAZYMIND_DESKTOP_PRUNE_PYTHON -ne 'false') { $pythonPruneArgs += '--apply' }
+    Invoke-Native $algorithmPython $pythonPruneArgs
+    if ($env:LAZYMIND_DESKTOP_DEFER_PYTHON -ne 'false') {
+        Invoke-Native $algorithmPython @(
+            (Join-Path $repoRoot 'desktop\scripts\build-python-components.py'),
+            $runtimeRoot, '--output', (Join-Path $repoRoot 'desktop\dist\python-components\windows-amd64')
+        )
+    }
     Finalize-Desktop $PackageKind
 }
 
