@@ -4,6 +4,48 @@
 
 安装包包含基础 Python、聊天和共用依赖；RAG 专用依赖独立生成 ZIP，用户在应用内按需安装。Workflow 演示案例在首次启动 warmup 时自动下载。两者是不同的资源、不同的下载时机。
 
+## 0. 换电脑或交给同事打包：先确认架构
+
+在同事的 Mac 原生终端运行：
+
+```bash
+uname -m
+node -p process.arch
+sw_vers -productVersion
+```
+
+| 目标电脑 | 架构 | 当前流程 |
+| --- | --- | --- |
+| M 系列 Mac | `arm64` | 本文第 1～8 节可用；不同代 M 芯片无需分别打包 |
+| Intel Mac | `x86_64`，Node 显示 `x64` | 需要单独的 Intel 应用和 `darwin-amd64` RAG 包；仓库目前没有完整的 Intel 构建入口，见第 9 节 |
+
+**当前脚本不是通用 Mac 构建脚本。** 不要在 Intel Mac 或 M 系列的 Rosetta 终端直接运行 `make desktop-darwin-arm64`；它硬编码了 ARM64 的飞书 CLI、manifest、Electron 架构和输出路径，会混入错误架构的文件。也不能把 ARM64 ZIP 改名为 x64，或只给 Electron 加 `--x64`。
+
+CPU 架构与 macOS 版本是两项独立要求。本次 ARM64 构建使用的 `scipy==1.17.1` wheel 标记为 `macosx_14_0_arm64`，因此不能声称支持 macOS 13 及更旧系统；这也不代表已验证所有 macOS 14+ 版本。若需要兼容更旧系统，要另行约束依赖版本、检查原生库最低系统版本并在目标系统实测。
+
+### 交接给另一台机器的内容
+
+1. **完整的同一代码版本**，包括本轮 Mac 修复：构建时将 runtime 暂移出未签名 `.app` 后拆包；验证脚本和 runtime-manager 将 Numba 缓存写到应用外。只复制本文或只拉取旧的 `7587bcb7` 不包含这些本地修复。
+2. 主仓库记录的 LazyLLM 子模块版本，按第 1 节初始化；不要复制开发者的 `.venv`、`node_modules` 或旧 build 目录。
+3. ModelScope 数据集位置，以及需要的签名方式。ad-hoc ZIP 可用于本地测试；Developer ID/公证构建需要那台机器自己的证书和发布配置，不把证书或密钥放进 Git。
+4. 构建完成交回：应用 ZIP/DMG、同次 RAG ZIP、catalog、SHA256SUMS、本地/云端验证报告和构建日志。即使同一提交重新解析依赖，也不能默认沿用另一台机器的组件。
+
+如果修复尚未推送，可在原构建机仓库根目录导出已跟踪文件的修改补丁，并通过文件传输交给同事：
+
+```bash
+# 原构建机：记录基线并导出本地修改（输出到仓库外）
+git rev-parse HEAD > ../lazymind-mac-build-base.txt
+git diff --binary HEAD -- desktop/INSTALL.zh-CN.md \
+  desktop/electron/electron-builder.config.cjs \
+  desktop/scripts/verify-python-components.py \
+  local/local-runtime-manager/runtime_env.go \
+  local/local-runtime-manager/runtime_env_test.go \
+  docs/development/desktop-package-size-reduction.md \
+  > ../lazymind-mac-build.patch
+```
+
+同事先检出记录的基线，然后执行 `git apply --check /path/to/lazymind-mac-build.patch`，确认成功后执行 `git apply /path/to/lazymind-mac-build.patch`。如果这些修改已经提交并推送，直接检出包含修复的提交，不要重复应用补丁。
+
 ## 1. 准备构建环境和代码
 
 需要 Xcode Command Line Tools、Git、make、Node.js 20、pnpm 10、Go 1.25 或更新的兼容工具链，以及 uv。与仓库 CI 保持一致可减少环境差异；Python 3.11.15 由构建脚本通过 uv 准备，不需要手动安装 Python 依赖。桌面构建不需要 Docker。
@@ -20,13 +62,26 @@ go version
 uv --version
 ```
 
-先将本轮主仓库代码推送到自己的开发分支，在 Mac 检出同一分支并更新：
+新电脑首次获取代码（本次分支在个人仓库 `CarlosShaoting/LazyRAG`，本机命名为 `upstream` 的官方仓库没有此分支）：
+
+```bash
+git clone --branch cst/installer_opt --single-branch \
+  https://github.com/CarlosShaoting/LazyRAG.git LazyMind-installer-opt
+cd LazyMind-installer-opt
+git submodule update --init algorithm/lazyllm
+git rev-parse HEAD
+git submodule status algorithm/lazyllm
+```
+
+已有独立构建仓库时，先确认工作区改动已妥善保存，再更新当前分支：
 
 ```bash
 git pull --ff-only
 git submodule update --init algorithm/lazyllm
 git status --short
 ```
+
+按第 0 节确认 Mac 修复已包含在提交中，或应用交接补丁。建议用独立克隆做构建，避免切换同事正在开发且有未提交修改的工作区。
 
 **不要把 `algorithm/lazyllm` 子模块指针提交到 LazyMind。** 本轮不要求修改 LazyLLM 源码，也不要求修改 Skill。上面的 submodule 命令是在 Mac 获取主仓库记录的源码版本；不要用另一台机器未提交的旧检出替代。
 
@@ -51,6 +106,18 @@ LAZYMIND_DESKTOP_PACKAGE_KIND=zip \
 LAZYMIND_DESKTOP_SIGNING_MODE=adhoc \
 make desktop-darwin-arm64
 ```
+
+需要保存完整构建日志时，可用下面命令替代上面的构建命令；`pipefail` 确保构建失败不会被 `tee` 掩盖：
+
+```bash
+mkdir -p desktop/dist/build-logs
+set -o pipefail
+LAZYMIND_DESKTOP_PACKAGE_KIND=zip \
+LAZYMIND_DESKTOP_SIGNING_MODE=adhoc \
+make desktop-darwin-arm64 2>&1 | tee desktop/dist/build-logs/build-mac-arm64.log
+```
+
+脚本依次下载并校验飞书 CLI、编译 Go 服务、构建前端、安装 Python 3.11.15 及依赖、裁剪 Python、准备内置资源和案例下载描述、组装 Electron、拆出 RAG、签名并压缩应用。首次构建需要联网且下载较多；看到依赖安装完成不代表最终打包完成。结束时必须返回退出码 0，且打印 `.app` 和 ZIP/DMG 路径。
 
 **已有 Developer ID Application 证书：可以选择签名 DMG。** 先确认登录钥匙串中的身份，再构建：
 
@@ -108,6 +175,9 @@ MAC_PYTHON="$MAC_RUNTIME/deps/python/algorithm/bin/python"
   --runtime "$MAC_RUNTIME" \
   --bundle-dir "$(pwd)/desktop/dist/python-components/darwin-arm64" \
   --report "$(pwd)/desktop/dist/component-check/darwin-arm64/local-report.json"
+
+# 验证导入没有向应用内写缓存、破坏签名
+codesign --verify --deep --strict --verbose=2 desktop/dist/mac-arm64/LazyMind.app
 ```
 
 成功应返回退出码 0，并且报告为 `"passed": true`。检查包括基础依赖导入、RAG ZIP 校验/解压、RAG 导入、Milvus 写入/落盘/重启后检索/删除集合。测试使用临时数据库，保留分阶段日志，不修改用户知识库。
@@ -116,7 +186,7 @@ MAC_PYTHON="$MAC_RUNTIME/deps/python/algorithm/bin/python"
 
 ## 5. 手动上传 ModelScope
 
-1. 登录 ModelScope，打开数据集 **`CarlosShaoting/lazymind-cst`**。
+1. 登录 ModelScope，打开数据集 [CarlosShaoting/lazymind-cst](https://modelscope.cn/datasets/CarlosShaoting/lazymind-cst)。
 2. 将第 3 步打印的 **Mac RAG 原始 ZIP** 上传到 **`master` 分支根目录**。
 3. 保持文件名和 ZIP 内容不变，不解压后上传、不再次压缩，也不要把整个组件目录套成另一个 ZIP。
 4. `python-components.json`、`SHA256SUMS` 和测试报告本地留档；应用运行不要求将它们上传。应用 ZIP/DMG 是给用户安装的另一个分发文件，不要把它填写为 RAG 下载地址。
@@ -138,6 +208,8 @@ https://modelscope.cn/datasets/CarlosShaoting/lazymind-cst/resolve/master/<第3�
 "$MAC_PYTHON" -B desktop/scripts/verify-python-components.py \
   --runtime "$MAC_RUNTIME" \
   --report "$(pwd)/desktop/dist/component-check/darwin-arm64/cloud-report.json"
+
+codesign --verify --deep --strict --verbose=2 desktop/dist/mac-arm64/LazyMind.app
 ```
 
 再次确认退出码 0、`passed=true`。这一步验证云端文件与本次安装包清单相符，而不只是网页能打开；测试会下载完整组件。
@@ -171,6 +243,37 @@ open desktop/dist/mac-arm64/LazyMind.app
 | 验证脚本提示基础环境仍有 RAG | 检查使用的是最终 `.app` 的 Python，而不是中间 build runtime 或系统 Python |
 | DMG 提示找不到签名身份 | 使用已配置 Developer ID 的钥匙串，或改用第 2 步的 ad-hoc ZIP 做本机测试 |
 | macOS 提示来源/签名问题 | 区分本地 ad-hoc 包、Developer ID 签名包与已公证包；正式分发遵循现有签名/公证流程 |
+| 构建拆包时弹出“应用已损坏”，随后文件消失 | 确认包含将 runtime 暂移到 `.app` 外拆包的修复；被移入废纸篓的构建产物需要重新封装 |
+| 验证后签名报新增 `.nbc/.nbi` 文件 | 确认使用新版验证脚本，且 runtime-manager 设置 `NUMBA_CACHE_DIR` 到用户缓存；仅加 `-B` 不能阻止 Numba 缓存 |
 | 修改代码后重新打包 | 重做第 3～6 步；按新 catalog 选择组件，不改写旧文件名来冒充新组件 |
 
 后续若改用 GitHub 构建安装包，也要上传那次 Actions 的 `macos-python-components` 附件中配套的原始 RAG ZIP，不能默认沿用这次本地产物。详细实现、体积记录和已知问题见 [开发文档](../docs/development/desktop-package-size-reduction.md)。
+
+## 9. Intel Mac 打包交接清单（尚未实现，不能直接照 ARM64 命令执行）
+
+如果同事用的是 Intel Mac，应先完成下面的构建适配，再进行原生构建和验证。本节是实现清单，**不是已经验证可运行的 x64 打包命令**。
+
+| 位置 | 必须适配的内容 |
+| --- | --- |
+| `desktop/scripts/build-darwin-arm64.sh`、`Makefile` | 新增 x64 入口或统一参数化；校验宿主/目标架构，隔离 build/dist 路径 |
+| 飞书 CLI 下载和校验 | 使用官方提供的 Intel 产物及其真实 SHA；不能沿用 `darwin-arm64` URL/哈希，先确认发布资源是否存在 |
+| Python 和 Go 服务 | 原生 x86_64 Python 3.11.15 及其 wheels、amd64 Go/CGO 二进制；不可复制 ARM64 环境 |
+| `desktop/scripts/write-runtime-manifest.mjs` | 当前支持列表只有 `darwin/arm64`、`windows/amd64`；增加并测试 `darwin/amd64`，同时检查相关运行时校验 |
+| `desktop/electron/package.json` | 增加 Electron `--x64` 打包脚本及对应 ZIP/DMG 输出 |
+| `desktop/electron/electron-builder.config.cjs` | 组件输出目录目前固定 `darwin-arm64`，需按目标架构生成；保留包外拆包、组件原生库签名和最终应用签名顺序 |
+| CI、验证和文档 | 如需 CI，另配 Intel runner；增加 manifest/架构测试，用最终 Intel `.app` 验证本地和云端组件及签名 |
+
+命名约定要区分：macOS `uname` 为 `x86_64`，Node/Electron 使用 `x64`，Go 和本项目组件 catalog 使用 `amd64`。期望 Intel 组件名为 `lazymind-python-rag-darwin-amd64-cp311-<revision>.zip`，其 SHA、revision 和 fingerprint 由真实构建生成，不能手写或复用 ARM64 值。
+
+完成适配后，先检查 Go 可执行文件、Python、Electron 和组件内 `.so/.dylib` 的实际架构，再重复第 3～7 节的配套校验、Milvus 持久化、云端下载及业务试用。所有路径和 catalog 架构断言需要换成 Intel 构建的实际值。Intel 和 ARM64 原始组件 ZIP 可以共存于同一 ModelScope 数据集，应用各自使用自己的 catalog 地址。
+
+## 10. 本次 ARM64 已完成的参考结果
+
+2026-09-20，以 `7587bcb7` 加本地 Mac 修复构建：
+
+- RAG 文件：`lazymind-python-rag-darwin-arm64-cp311-53a1c2e770966b71.zip`。
+- 大小：54,515,729 字节（51.99 MiB）；SHA-256：`f90b5c00b43943b031d698fc939c81b24d77a738e357bb541fe74d7e768fb8d1`。
+- 已上传默认 ModelScope 目录；从云端实际下载后，六阶段验证全部通过，应用签名复查通过。
+- 应用为本地 ad-hoc 测试包；没有完成 Developer ID/公证、全部业务界面或其他 macOS 版本验证。
+
+这些记录用于核对本次交付，**不是另一台机器重新构建后必须得到的文件名或哈希**。重新构建仍以新应用中的 catalog 为准。

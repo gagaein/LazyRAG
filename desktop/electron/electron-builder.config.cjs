@@ -183,13 +183,21 @@ async function adhocSignAppBundle(appPath) {
 
 async function splitPythonComponents(runtimeRoot) {
   if (process.env.LAZYMIND_DESKTOP_DEFER_PYTHON === "false") return;
-  const { stdout } = await execFile(
-    path.join(runtimeRoot, "deps/python/algorithm/bin/python"),
-    [path.resolve(__dirname, "../scripts/build-python-components.py"), runtimeRoot,
-      "--output", path.resolve(__dirname, "../dist/python-components/darwin-arm64")],
-    { maxBuffer: 4 * 1024 * 1024 },
-  );
-  console.log(stdout);
+  // Running Python inside the unfinished app can trigger Gatekeeper before the
+  // outer bundle is signed. Relative runtime symlinks remain valid after moving.
+  const appOutDir = path.resolve(runtimeRoot, "../../../..");
+  const { stagedRuntime } = stageEmbeddedRuntime(appOutDir);
+  try {
+    const { stdout } = await execFile(
+      path.join(stagedRuntime, "deps/python/algorithm/bin/python"),
+      [path.resolve(__dirname, "../scripts/build-python-components.py"), stagedRuntime,
+        "--output", path.resolve(__dirname, "../dist/python-components/darwin-arm64")],
+      { maxBuffer: 4 * 1024 * 1024 },
+    );
+    console.log(stdout);
+  } finally {
+    restoreEmbeddedRuntime(appOutDir);
+  }
 }
 
 async function signAndStageEmbeddedRuntime(context) {

@@ -121,6 +121,8 @@ def run_child(name, arguments, logs):
     command = [sys.executable, '-I', '-B', '-X', 'utf8', str(Path(__file__).resolve()), '--worker', name, *arguments]
     options = ({'creationflags': subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == 'nt'
                else {'start_new_session': True})
+    # -B suppresses .pyc but not Numba's JIT cache. Keep signed apps read-only.
+    options['env'] = {**os.environ, 'NUMBA_CACHE_DIR': str(logs / 'numba-cache')}
     with log_path.open('w', encoding='utf-8') as log:
         child = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT, **options)
         try:

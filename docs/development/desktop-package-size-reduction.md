@@ -77,6 +77,18 @@ Windows 原生验证：6 项组件测试通过，包含真实 ZIP 经 HTTPS 下�
 
 验证日志在 Windows 输出目录的 `verification.log`、`stock-milvus-verification.log`、`milvus-smoke.log`。完整 smoke 日志还记录了测试临时目录清理时 Windows 已加载 `.pyd` 文件被锁定的报错；该清理错误不属于应用组件安装失败。
 
+## 2026-09-20 Mac ARM64 本地补测
+
+以 `7587bcb7` 为基础，使用 Node 20.20.2、pnpm 10.34.5、Python 3.11.15 和主仓库记录的 LazyLLM 源码，构建本地 ad-hoc 应用及配套组件。Mac 封装另修复了在尚未签名的 `.app` 内启动 Python 导致系统弹出损坏提示的问题：拆包前将 runtime 临时移到应用包外，完成后恢复，再执行原有签名流程；失败时也恢复 runtime。
+
+- RAG ZIP：`lazymind-python-rag-darwin-arm64-cp311-53a1c2e770966b71.zip`，54,515,729 字节（51.99 MiB）。
+- SHA-256：`f90b5c00b43943b031d698fc939c81b24d77a738e357bb541fe74d7e768fb8d1`。
+- 最终应用的 catalog 与组件 catalog 一致；本地组件验证六阶段全部通过，包含 Milvus 显式 flush、重启检索和删除集合。报告：`desktop/dist/component-check/darwin-arm64/local-report.json`。
+- 裁剪测试 13 项通过、2 项 Windows 专属跳过；Desktop 构建脚本测试 41 项通过。应用 ad-hoc 签名校验通过。
+- 首轮导入验证发现 Numba 的 `.nbc/.nbi` 缓存会写入应用内，`-B` 无法禁止这种缓存。验证脚本现将 `NUMBA_CACHE_DIR` 指向报告目录，runtime-manager 将其指向用户 runtime 缓存；定向环境测试通过。清理测试缓存并重新签名后，再执行组件验证及签名复查。
+- 用户已上传 ModelScope；实际云端下载后六阶段验证全部通过，验证后应用签名复查通过，报告为 `desktop/dist/component-check/darwin-arm64/cloud-report.json`。尚未执行完整业务界面回归或 Developer ID 签名/公证；此组件应与本次应用配套使用。
+- 换电脑交接、完整 ARM64 构建步骤及尚待实现的 Intel 适配清单见 [Mac 打包文档](../../desktop/INSTALL.zh-CN.md)。当前没有可直接运行的 Intel Mac 完整打包入口。
+
 ## 体积证据与预估
 
 - 历史 Windows installer：用户提供的 9 月 9 日产物 **480.91 MiB**；未拿到该文件独立复测。
